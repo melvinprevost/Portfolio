@@ -50,19 +50,50 @@ function scanlines(ctx, alpha = 0.06) {
   for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 2);
 }
 
-/* ---------------- Écran gauche : Parcours ---------------- */
+/* Bouton « avant-goût » commun : invite à cliquer pour entrer dans l'écran */
+function teaserCTA(ctx, t, label, color, y = 610) {
+  const pulse = 0.5 + 0.5 * Math.sin(t * 2.6);
+  ctx.font = '600 24px "JetBrains Mono"';
+  const w = ctx.measureText(label).width + 70;
+  const x = (W - w) / 2;
+  ctx.save();
+  ctx.globalAlpha = 0.25 + pulse * 0.25;
+  ctx.fillStyle = color;
+  roundRect(ctx, x, y - 38, w, 58, 29);
+  ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  roundRect(ctx, x, y - 38, w, 58, 29);
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.fillText(label, W / 2, y);
+  ctx.textAlign = 'left';
+}
+
+// Lignes floues « contenu à découvrir »
+function ghostLines(ctx, x, y, widths, color) {
+  ctx.save();
+  ctx.filter = 'blur(3px)';
+  widths.forEach((w, i) => {
+    ctx.globalAlpha = 0.35 - i * 0.05;
+    ctx.fillStyle = color;
+    roundRect(ctx, x, y + i * 26, w, 12, 6);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+/* ---------------- Écran gauche : Parcours (avant-goût) ---------------- */
 function parcoursScreen() {
   const canvas = makeCanvas();
   const ctx = canvas.getContext('2d');
   const texture = makeTexture(canvas);
-
-  const items = [
-    ['OCT. 2026 →', 'CDI · Chargé de projets & admin sys/réseaux', 'CRAM · Le Havre', true],
-    ['AVR. 2026 →', 'Fondateur', 'CreaVizione', true],
-    ['2023 — 2026', 'Alternance · même poste', 'CRAM', false],
-    ['2024 — 2026', 'MSc Expert en informatique et SI', 'EPSI Rennes', false],
-    ['2023 — 2024', 'Bachelor IT · SysOps', 'EPSI Rennes', false],
-    ['2021 — 2023', 'BTS SIO · SLAM', 'StJoSup · Le Havre', false],
+  const chips = [
+    ['CRAM', 'CDI · depuis oct. 2026'],
+    ['CreaVizione', 'Fondateur · 2026'],
+    ['EPSI Rennes', 'MSc Bac +5 · obtenu'],
   ];
 
   function draw(t) {
@@ -73,50 +104,39 @@ function parcoursScreen() {
     ctx.fillRect(0, 0, W, H);
     titleBar(ctx, '~/parcours', '#071827');
 
+    ctx.textAlign = 'center';
     ctx.fillStyle = '#38bdf8';
     ctx.font = '700 22px "JetBrains Mono"';
-    ctx.fillText('// PARCOURS', 70, 104);
+    ctx.fillText('// PARCOURS', W / 2, 120);
     ctx.fillStyle = '#e8ecf5';
-    ctx.font = '700 54px "Space Grotesk"';
-    ctx.fillText('Expériences & formations', 70, 166);
+    ctx.font = '700 64px "Space Grotesk"';
+    ctx.fillText("3 ans d'alternance,", W / 2, 200);
+    ctx.fillText('puis un CDI.', W / 2, 272);
+    ctx.textAlign = 'left';
 
-    // ligne verticale
-    const x0 = 90;
-    const top = 216;
-    const step = 78;
-    ctx.strokeStyle = 'rgba(56,189,248,0.35)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x0, top);
-    ctx.lineTo(x0, top + step * (items.length - 1) + 10);
-    ctx.stroke();
-
-    const active = Math.floor(t / 1.6) % items.length;
-    items.forEach(([when, what, where, now], i) => {
-      const y = top + i * step;
-      const hi = i === active;
-      if (hi) {
-        ctx.fillStyle = 'rgba(56,189,248,0.08)';
-        roundRect(ctx, 60, y - 28, W - 120, 66, 10);
-        ctx.fill();
-      }
-      ctx.beginPath();
-      ctx.arc(x0, y + 4, 9, 0, Math.PI * 2);
-      ctx.fillStyle = now || hi ? '#38bdf8' : '#061522';
+    // trois « puces » qui s'allument tour à tour
+    const active = Math.floor(t / 1.4) % chips.length;
+    const cw = 330;
+    const gap = 24;
+    const x0 = (W - (cw * 3 + gap * 2)) / 2;
+    chips.forEach(([a, b], i) => {
+      const x = x0 + i * (cw + gap);
+      const on = i === active;
+      ctx.fillStyle = on ? 'rgba(56,189,248,0.14)' : 'rgba(255,255,255,0.03)';
+      roundRect(ctx, x, 320, cw, 104, 14);
       ctx.fill();
-      ctx.strokeStyle = '#38bdf8';
+      ctx.strokeStyle = on ? '#38bdf8' : 'rgba(56,189,248,0.25)';
+      ctx.lineWidth = 2;
       ctx.stroke();
-
-      ctx.fillStyle = '#38bdf8';
-      ctx.font = '500 20px "JetBrains Mono"';
-      ctx.fillText(when, 124, y + 11);
       ctx.fillStyle = '#e8ecf5';
-      ctx.font = '600 26px "Inter"';
-      ctx.fillText(what, 330, y + 4);
+      ctx.font = '600 28px "Inter"';
+      ctx.fillText(a, x + 24, 362);
       ctx.fillStyle = '#8b93a7';
-      ctx.font = '400 19px "Inter"';
-      ctx.fillText(where, 330, y + 30);
+      ctx.font = '400 21px "Inter"';
+      ctx.fillText(b, x + 24, 398);
     });
+    ghostLines(ctx, x0, 462, [640, 520, 580], '#38bdf8');
+    teaserCTA(ctx, t, '▶  Cliquer pour voir le parcours', '#38bdf8');
     scanlines(ctx, 0.05);
     texture.needsUpdate = true;
   }
@@ -125,13 +145,13 @@ function parcoursScreen() {
   return {
     texture,
     update(t) {
-      const k = Math.floor(t / 1.6);
+      const k = Math.floor(t * 8);
       if (k !== last) { last = k; draw(t); }
     },
   };
 }
 
-/* ---------------- Écran central : terminal ---------------- */
+/* ---------------- Écran central : terminal (avant-goût) ---------------- */
 function profilScreen() {
   const canvas = makeCanvas();
   const ctx = canvas.getContext('2d');
@@ -141,27 +161,18 @@ function profilScreen() {
   const script = [
     { p: true, s: 'whoami' },
     { s: 'Melvin Prévost', c: '#e8ecf5', b: true },
-    { s: 'Chargé de projets & admin systèmes et réseaux @ CRAM', c: '#a7b0c2' },
-    { p: true, s: 'cat statut.txt' },
-    { s: 'CDI depuis oct. 2026 (après 3 ans d\'alternance)', c: '#a7b0c2' },
-    { s: 'Fondateur de CreaVizione depuis avr. 2026', c: '#a7b0c2' },
+    { s: 'Chargé de projets & admin systèmes et réseaux', c: '#a7b0c2' },
     { p: true, s: 'ls competences/' },
-    { s: 'reseaux/  systemes/  virtualisation/  supervision/', c: '#38bdf8' },
-    { s: 'sauvegarde/  scripts/  web/', c: '#38bdf8' },
-    { p: true, s: 'ping melvin' },
-    { s: '64 bytes from le-havre: curiosite=100% autonomie=100%', c: '#a7b0c2' },
-    { p: true, s: './entrer.sh' },
+    { s: 'reseaux/  systemes/  virtualisation/  ...', c: '#38bdf8' },
+    { p: true, s: './profil.sh --details' },
   ];
-  // nombre total de caractères « tapés »
-  const lengths = script.map((l) => l.s.length + (l.p ? 0 : 0));
-  const total = lengths.reduce((a, b) => a + b, 0);
-  const CPS = 38; // caractères / seconde
-  const LOOP = total / CPS + 6;
+  const total = script.reduce((a, l) => a + l.s.length, 0);
+  const CPS = 30;
+  const LOOP = total / CPS + 7;
 
   function draw(t) {
     ctx.fillStyle = '#040806';
     ctx.fillRect(0, 0, W, H);
-    // halo vert léger
     const rg = ctx.createRadialGradient(W / 2, H / 2, 50, W / 2, H / 2, W * 0.7);
     rg.addColorStop(0, 'rgba(74,222,128,0.07)');
     rg.addColorStop(1, 'rgba(0,0,0,0)');
@@ -170,24 +181,24 @@ function profilScreen() {
     titleBar(ctx, 'melvin@bureau: ~', '#08120c');
 
     let budget = Math.floor((t % LOOP) * CPS);
-    const lh = 46;
-    let y = 104;
-    const x = 48;
+    const lh = 52;
+    let y = 116;
+    const x = 60;
     let cursorX = x;
     let cursorY = y;
     for (const line of script) {
       if (budget <= 0) break;
-      ctx.font = `${line.b ? '700 30px' : '400 26px'} "JetBrains Mono"`;
       let px = x;
       if (line.p) {
         ctx.fillStyle = '#4ade80';
-        ctx.font = '600 26px "JetBrains Mono"';
+        ctx.font = '600 30px "JetBrains Mono"';
         ctx.fillText(P, px, y);
         px += ctx.measureText(P).width;
         ctx.fillStyle = '#e8ecf5';
-        ctx.font = '400 26px "JetBrains Mono"';
+        ctx.font = '400 30px "JetBrains Mono"';
       } else {
         ctx.fillStyle = line.c;
+        ctx.font = `${line.b ? '700 36px' : '400 30px'} "JetBrains Mono"`;
       }
       const shown = line.s.slice(0, budget);
       ctx.fillText(shown, px, y);
@@ -198,8 +209,9 @@ function profilScreen() {
     }
     if (Math.floor(t * 2) % 2 === 0) {
       ctx.fillStyle = '#4ade80';
-      ctx.fillRect(cursorX + 4, cursorY - 24, 14, 30);
+      ctx.fillRect(cursorX + 6, cursorY - 26, 15, 32);
     }
+    teaserCTA(ctx, t, '▶  Cliquer pour ouvrir le profil', '#4ade80');
     scanlines(ctx, 0.07);
     texture.needsUpdate = true;
   }
@@ -254,19 +266,7 @@ function creavizioneScreen() {
     ctx.fillText('Agence digitale · Le Havre · depuis avril 2026', W / 2, 390);
     ctx.fillText('Sites internet & applications web sur mesure', W / 2, 432);
 
-    // bouton
-    const pulse = 0.5 + 0.5 * Math.sin(t * 2.4);
-    const bw = 380;
-    const bx = (W - bw) / 2;
-    ctx.strokeStyle = `rgba(196,54,90,${0.5 + pulse * 0.5})`;
-    ctx.lineWidth = 3;
-    roundRect(ctx, bx, 500, bw, 70, 12);
-    ctx.stroke();
-    ctx.fillStyle = `rgba(160,18,46,${0.15 + pulse * 0.2})`;
-    ctx.fill();
-    ctx.fillStyle = '#f7f2f3';
-    ctx.font = '600 26px "Josefin Sans"';
-    ctx.fillText('creavizione.com  →', W / 2, 545);
+    teaserCTA(ctx, t, "▶  Cliquer pour découvrir l'entreprise", '#c4365a', 560);
     ctx.textAlign = 'left';
     scanlines(ctx, 0.04);
     texture.needsUpdate = true;

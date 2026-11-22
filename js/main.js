@@ -3,8 +3,9 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { createScreens } from './screens.js';
-import { buildScene } from './scene.js';
+import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+import { createScreens } from './screens.js?v=3';
+import { buildScene } from './scene.js?v=3';
 
 const $ = (s) => document.querySelector(s);
 const loaderText = $('#loader-text');
@@ -36,7 +37,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPrefere
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+renderer.toneMappingExposure = 1.3;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -83,6 +84,7 @@ const state = {
   pointer: new THREE.Vector2(),
   parallax: new THREE.Vector2(),
   tween: null,
+  inScreen: false,
 };
 
 const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
@@ -103,7 +105,41 @@ function tweenCamera(toPos, toTarget, duration, done) {
 const monitorsByKey = Object.fromEntries(world.monitors.map((m) => [m.key, m]));
 const screenMeshes = world.monitors.map((m) => m.screen);
 
-function poseForScreen(m) {
+// Sur grand écran, la fenêtre s'affiche DANS le moniteur 3D (CSS3D, interactive).
+// Sur téléphone / écran étroit, elle s'ouvre en plein écran pour rester lisible.
+const inScreenMode = () => window.innerWidth >= 760 && window.innerWidth / window.innerHeight >= 1;
+const FILL = 1.12; // l'écran occupe ~1/FILL de la vue : on garde le cadre du moniteur visible
+
+const cssRenderer = new CSS3DRenderer();
+cssRenderer.setSize(window.innerWidth, window.innerHeight);
+cssRenderer.domElement.id = 'css3d';
+document.body.appendChild(cssRenderer.domElement);
+const cssScene = new THREE.Scene();
+scene.updateMatrixWorld(true);
+const screenUI = {};
+world.monitors.forEach((m) => {
+  const wrapper = document.createElement('div');
+  wrapper.className = `screen-ui panel-${m.key}`; // reprend le thème du panneau
+  wrapper.style.setProperty('--accent', m.color);
+  const obj = new CSS3DObject(wrapper);
+  m.screen.getWorldPosition(obj.position);
+  m.screen.getWorldQuaternion(obj.quaternion);
+  cssScene.add(obj);
+  screenUI[m.key] = { wrapper, obj };
+});
+
+function sizeScreenUI(key) {
+  const m = monitorsByKey[key];
+  const aspect = m.width / m.height;
+  const pxW = Math.round(Math.min(window.innerWidth, window.innerHeight * aspect) / FILL);
+  const pxH = Math.round(pxW / aspect);
+  const { wrapper, obj } = screenUI[key];
+  wrapper.style.width = pxW + 'px';
+  wrapper.style.height = pxH + 'px';
+  obj.scale.setScalar(m.width / pxW);
+}
+
+function poseForScreen(m, fill) {
   m.screen.updateMatrixWorld();
   const center = new THREE.Vector3();
   m.screen.getWorldPosition(center);
@@ -112,8 +148,32 @@ function poseForScreen(m) {
   const aspect = camera.aspect;
   const dH = (m.height / 2) / Math.tan(vfov / 2);
   const dW = (m.width / 2) / (Math.tan(vfov / 2) * aspect);
-  const dist = Math.max(dH, dW) * 0.92;
+  const dist = Math.max(dH, dW) * fill;
   return { pos: center.clone().addScaledVector(normal, dist), target: center };
+}
+
+function openWindow(key) {
+  const panel = $(`#panel-${key}`);
+  const win = panel.querySelector('.window');
+  if (state.inScreen) {
+    const { wrapper } = screenUI[key];
+    sizeScreenUI(key);
+    wrapper.appendChild(win);
+    requestAnimationFrame(() => wrapper.classList.add('on'));
+  } else {
+    panel.appendChild(win);
+    panel.classList.add('open');
+    panel.setAttribute('aria-hidden', 'false');
+  }
+  win.querySelector('.window-body').scrollTop = 0;
+  win.querySelector('[data-close]').focus({ preventScroll: true });
+}
+
+function closeWindow(key) {
+  screenUI[key].wrapper.classList.remove('on');
+  const panel = $(`#panel-${key}`);
+  panel.classList.remove('open');
+  panel.setAttribute('aria-hidden', 'true');
 }
 
 function enterScreen(key) {
@@ -121,24 +181,19 @@ function enterScreen(key) {
   const m = monitorsByKey[key];
   state.mode = 'zooming';
   state.active = key;
+  state.inScreen = inScreenMode();
   setHover(null);
   document.body.classList.add('zoomed');
-  const pose = poseForScreen(m);
+  const pose = poseForScreen(m, state.inScreen ? FILL : 0.92);
   tweenCamera(pose.pos, pose.target, 1300, () => {
     state.mode = 'inside';
-    const panel = $(`#panel-${key}`);
-    panel.classList.add('open');
-    panel.setAttribute('aria-hidden', 'false');
-    panel.querySelector('.window-body').scrollTop = 0;
-    panel.querySelector('[data-close]').focus({ preventScroll: true });
+    openWindow(key);
   });
 }
 
 function leaveScreen() {
   if (state.mode !== 'inside') return;
-  const panel = $(`#panel-${state.active}`);
-  panel.classList.remove('open');
-  panel.setAttribute('aria-hidden', 'true');
+  closeWindow(state.active);
   state.mode = 'leaving';
   home = homePose();
   setTimeout(() => {
@@ -147,7 +202,7 @@ function leaveScreen() {
       state.active = null;
       document.body.classList.remove('zoomed');
     });
-  }, 250);
+  }, 280);
 }
 
 document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', leaveScreen));
@@ -194,6 +249,7 @@ canvas.addEventListener('pointermove', (e) => {
 });
 canvas.addEventListener('pointerleave', () => setHover(null));
 canvas.addEventListener('click', (e) => {
+  if (state.mode === 'inside' && state.inScreen) return leaveScreen(); // clic hors de l'écran
   if (state.mode !== 'home') return;
   const key = pick(e.clientX, e.clientY);
   if (key) enterScreen(key);
@@ -207,9 +263,11 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
   composer.setSize(w, h);
+  cssRenderer.setSize(w, h);
   home = homePose();
   if (state.mode === 'inside') {
-    const p = poseForScreen(monitorsByKey[state.active]);
+    const p = poseForScreen(monitorsByKey[state.active], state.inScreen ? FILL : 0.92);
+    if (state.inScreen) sizeScreenUI(state.active);
     camPos.copy(p.pos);
     camTarget.copy(p.target);
   }
@@ -249,6 +307,7 @@ function frame() {
   }
 
   composer.render();
+  cssRenderer.render(cssScene, camera);
   requestAnimationFrame(frame);
 }
 

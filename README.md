@@ -1,6 +1,6 @@
 # Portfolio 3D — Melvin Prévost
 
-Bureau de nuit en 3D (Three.js) : Melvin de dos devant trois écrans. Un clic sur un écran fait entrer la caméra dedans.
+Bureau de nuit en 3D (Three.js) : Melvin de dos devant trois écrans. Depuis le bureau, chaque écran affiche un avant-goût ; un clic fait entrer la caméra et le contenu s'affiche directement dans le moniteur (CSS3D, interactif). Sur téléphone, il s'ouvre en plein écran.
 
 | Écran | Contenu |
 |---|---|

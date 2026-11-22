@@ -1,7 +1,7 @@
 // Construction du bureau de nuit : pièce, bureau, 3 écrans, chaise, personnage de dos, décor.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { neonTexture, cityTexture } from './screens.js';
+import { neonTexture, cityTexture } from './screens.js?v=3';
 
 const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.05, ...opts });
 
@@ -410,8 +410,7 @@ export function buildScene(scene, screens) {
   const hoodieInner = mat('#1b1d23', { roughness: 0.95, side: THREE.DoubleSide });
   const pants = mat('#1a2133', { roughness: 0.85 });
   const skin = mat('#c99a80', { roughness: 0.9 });
-  const hairDark = mat('#24170f', { roughness: 0.9 });
-  const hairWarm = mat('#3a2516', { roughness: 0.85 });
+  const hairDark = mat('#2e1f16', { roughness: 0.82 });
   const shoeMat = mat('#e8e8ea', { roughness: 0.6 });
   const watchMat = mat('#0c0c0e', { roughness: 0.35, metalness: 0.4 });
 
@@ -469,13 +468,13 @@ export function buildScene(scene, screens) {
   torsoPivot.add(hoodInside);
 
   // Cou
-  const neck = makeLimb(0.05, skin);
-  setLimb(neck, new THREE.Vector3(0, 0.55, 0.0), new THREE.Vector3(0, 0.71, -0.015));
+  const neck = makeLimb(0.056, skin);
+  setLimb(neck, new THREE.Vector3(0, 0.55, 0.0), new THREE.Vector3(0, 0.69, -0.018));
   torsoPivot.add(neck);
 
   // Tête
   const head = new THREE.Group();
-  head.position.set(0, 0.785, -0.025);
+  head.position.set(0, 0.765, -0.025);
   torsoPivot.add(head);
   const skull = new THREE.Mesh(new THREE.SphereGeometry(0.1, 32, 24), skin);
   skull.scale.set(0.92, 1.12, 1.02);
@@ -488,64 +487,88 @@ export function buildScene(scene, screens) {
   head.add(jaw);
   // oreilles bien visibles, un peu décollées
   [-1, 1].forEach((s) => {
-    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.028, 14, 10), skin);
-    ear.scale.set(0.42, 1.1, 0.78);
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.023, 14, 10), skin);
+    ear.scale.set(0.4, 1.05, 0.72);
     ear.position.set(s * 0.094, -0.008, 0.008);
     ear.rotation.y = s * -0.35;
     ear.castShadow = true;
     head.add(ear);
   });
 
-  // Cheveux, base courte : calotte inclinée vers l'arrière (plus basse sur la nuque,
-  // plus haute sur le front), légèrement plus large que le crâne.
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.1, 36, 24, 0, Math.PI * 2, 0, Math.PI * 0.56), hairDark);
-  cap.scale.set(0.97, 1.14, 1.07);
-  cap.rotation.x = 0.42;
-  cap.position.set(0, 0.004, 0.002);
-  cap.castShadow = true;
-  head.add(cap);
-  // dégradé : fine bande de cheveux très courts sous la calotte, à l'arrière
-  const fade = new THREE.Mesh(
-    new THREE.SphereGeometry(0.1, 36, 12, Math.PI * 0.2, Math.PI * 0.6, Math.PI * 0.5, Math.PI * 0.16),
-    mat('#4a3528', { roughness: 0.95, transparent: true, opacity: 0.55 })
-  );
-  fade.scale.set(0.935, 1.13, 1.035);
-  fade.rotation.y = 0;
-  head.add(fade);
-
-  // Dessus : boucles volumineuses et en désordre, qui débordent un peu vers l'avant.
+  // ----- Cheveux (d'après photos) -----
+  // Base courte : coque légèrement plus grande que le crâne, découpée selon une ligne
+  // d'implantation réaliste (front haut, tempes, contour d'oreille, nuque basse).
   const rand = (() => {
-    let seed = 7;
+    let seed = 11;
     return () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
   })();
-  const N = 260;
-  const golden = Math.PI * (3 - Math.sqrt(5));
-  for (let i = 0; i < N; i++) {
-    const y = 1 - (i / (N - 1)) * 2;
-    const r = Math.sqrt(1 - y * y);
-    const th = golden * i;
-    const dir = new THREE.Vector3(Math.cos(th) * r, y, Math.sin(th) * r);
-    // zone « dessus » : haut du crâne + frange avant, pas les côtés ni la nuque
-    const top = dir.y > 0.55 || (dir.y > 0.3 && dir.z < -0.1 && Math.abs(dir.x) < 0.7);
-    if (!top) continue;
-    const size = 0.02 + rand() * 0.014;
-    const curl = new THREE.Mesh(new THREE.SphereGeometry(size, 9, 7), rand() < 0.35 ? hairWarm : hairDark);
-    const lift = 1.02 + rand() * 0.09;
-    curl.position.set(dir.x * 0.098 * lift, dir.y * 0.114 * lift + 0.006, dir.z * 0.105 * lift - 0.006);
-    curl.scale.set(1.15, 0.55 + rand() * 0.25, 1.15);
-    curl.rotation.set(rand() * 0.8, rand() * 3, rand() * 0.8);
-    curl.castShadow = true;
-    head.add(curl);
+  const hairline = (d) => {
+    // y minimal (sur la sphère unité) où pousse le cheveu, selon la direction
+    let h = -0.55 * d.z; // devant (z<0) : haut ; derrière (z>0) : bas
+    if (d.z < -0.2 && Math.abs(d.x) < 0.55) h = Math.max(h, 0.42); // front
+    if (Math.abs(d.x) > 0.72 && d.z < 0.35) h = Math.max(h, 0.16); // dégagé autour de l'oreille
+    return h;
+  };
+  function cutSphere(radius, wSeg, hSeg, keep) {
+    const g = new THREE.SphereGeometry(radius, wSeg, hSeg);
+    const pos = g.attributes.position;
+    const idx = g.index.array;
+    const out = [];
+    const c = new THREE.Vector3();
+    const v = new THREE.Vector3();
+    for (let i = 0; i < idx.length; i += 3) {
+      c.set(0, 0, 0);
+      for (let k = 0; k < 3; k++) c.add(v.fromBufferAttribute(pos, idx[i + k]));
+      c.normalize();
+      if (keep(c)) out.push(idx[i], idx[i + 1], idx[i + 2]);
+    }
+    g.setIndex(out);
+    return g;
   }
-  // quelques mèches qui retombent sur le front
-  for (let i = 0; i < 6; i++) {
-    const x = -0.05 + i * 0.02 + (rand() - 0.5) * 0.01;
-    const lock = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), hairDark);
-    lock.scale.set(0.8, 1.3, 0.8);
-    lock.position.set(x, 0.07 + rand() * 0.015, -0.088);
-    lock.rotation.z = (rand() - 0.5) * 0.8;
-    head.add(lock);
+  const shortHair = new THREE.Mesh(cutSphere(0.1, 160, 110, (d) => d.y > hairline(d)), hairDark);
+  shortHair.scale.set(0.92 * 1.05, 1.12 * 1.04, 1.02 * 1.05);
+  shortHair.castShadow = true;
+  head.add(shortHair);
+  // dégradé : bande plus claire et plus fine juste au-dessus de la ligne (nuque, tempes)
+  const fadeBand = new THREE.Mesh(
+    cutSphere(0.1, 160, 110, (d) => d.y > hairline(d) && d.y < hairline(d) + 0.2 && d.z > -0.3),
+    mat('#5a4134', { roughness: 0.95, transparent: true, opacity: 0.6 })
+  );
+  fadeBand.scale.set(0.92 * 1.053, 1.12 * 1.043, 1.02 * 1.053);
+  head.add(fadeBand);
+
+  // Dessus : plus long, ondulé, avec du volume (déborde un peu des côtés courts).
+  // Sphère déformée par un bruit « boucles » + quelques boucles en arc sur le contour.
+  const TA = 0.086, TB = 0.06, TC = 0.097;
+  const tOrigin = new THREE.Vector3(0, 0.072, 0.004);
+  const topGeo = new THREE.SphereGeometry(1, 96, 64);
+  {
+    const pos = topGeo.attributes.position;
+    const v = new THREE.Vector3();
+    const colors = [];
+    const cA = new THREE.Color('#24170f');
+    const cB = new THREE.Color('#5c3c27');
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i);
+      // ondulations larges (vagues) + petites boucles
+      const w =
+        0.6 * Math.sin(v.x * 9 + v.z * 4 + 1.3) * Math.sin(v.z * 8 + 0.4) +
+        0.5 * Math.sin(v.x * 21 + v.z * 13 + 0.7) * Math.sin(v.z * 19 - v.y * 11 + 1.9) +
+        0.3 * Math.sin(v.x * 37 - v.z * 29) * Math.sin(v.y * 31 + v.z * 7);
+      const k = 1 + 0.1 * w * THREE.MathUtils.smoothstep(v.y, -0.1, 0.5);
+      pos.setXYZ(i, v.x * k, v.y * k, v.z * k);
+      const mix = THREE.MathUtils.clamp(0.35 + w * 0.45, 0, 1);
+      const col = cA.clone().lerp(cB, mix * 0.7);
+      colors.push(col.r, col.g, col.b);
+    }
+    topGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    topGeo.computeVertexNormals();
   }
+  const topHair = new THREE.Mesh(topGeo, mat('#ffffff', { roughness: 0.82, vertexColors: true }));
+  topHair.scale.set(TA, TB, TC);
+  topHair.position.copy(tOrigin);
+  topHair.castShadow = true;
+  head.add(topHair);
 
   // Bras (recalculés à chaque frame pour l'animation)
   const upperL = makeLimb(0.052, hoodie);
@@ -556,11 +579,51 @@ export function buildScene(scene, screens) {
   const shoulderR = joint(0.064, hoodie);
   const elbowL = joint(0.049, hoodie);
   const elbowR = joint(0.049, hoodie);
-  const handSkin = mat('#9c7563', { roughness: 1 });
-  const handL = joint(0.036, handSkin);
-  const handR = joint(0.036, handSkin);
-  handL.scale.set(1, 0.6, 1.4);
-  handR.scale.set(1, 0.6, 1.4);
+  const handSkin = mat('#b48a74', { roughness: 0.95 });
+  // Main : paume + 4 doigts à deux phalanges + pouce. Repère local : -z = vers les doigts,
+  // +y = dos de la main. side = -1 (gauche) ou +1 (droite).
+  function makeHand(side) {
+    const g = new THREE.Group();
+    const palm = new THREE.Mesh(new RoundedBoxGeometry(0.066, 0.024, 0.078, 3, 0.01), handSkin);
+    palm.position.set(0, 0, -0.036);
+    palm.castShadow = true;
+    g.add(palm);
+    const fx = [-0.0235, -0.008, 0.0075, 0.0225]; // auriculaire → index
+    const flen = [0.022, 0.028, 0.031, 0.028];
+    const fingers = fx.map((x, i) => {
+      const base = new THREE.Group();
+      base.position.set(-side * x, -0.002, -0.074);
+      const seg1 = new THREE.Mesh(new THREE.CapsuleGeometry(0.0075, flen[i], 4, 8), handSkin);
+      seg1.rotation.x = -Math.PI / 2;
+      seg1.position.z = -flen[i] / 2;
+      seg1.castShadow = true;
+      base.add(seg1);
+      const tip = new THREE.Group();
+      tip.position.z = -flen[i];
+      base.add(tip);
+      const seg2 = new THREE.Mesh(new THREE.CapsuleGeometry(0.007, flen[i] * 0.65, 4, 8), handSkin);
+      seg2.rotation.x = -Math.PI / 2;
+      seg2.position.z = -flen[i] * 0.33;
+      tip.add(seg2);
+      g.add(base);
+      return { base, tip };
+    });
+    const thumb = new THREE.Group();
+    thumb.position.set(-side * -0.032, -0.006, -0.022);
+    thumb.rotation.set(-0.25, side * 0.75, side * 0.3);
+    const th1 = new THREE.Mesh(new THREE.CapsuleGeometry(0.0085, 0.024, 4, 8), handSkin);
+    th1.rotation.x = -Math.PI / 2;
+    th1.position.z = -0.012;
+    thumb.add(th1);
+    const th2 = new THREE.Mesh(new THREE.CapsuleGeometry(0.0078, 0.018, 4, 8), handSkin);
+    th2.rotation.set(-Math.PI / 2 - 0.3, 0, 0);
+    th2.position.set(0, -0.003, -0.032);
+    thumb.add(th2);
+    g.add(thumb);
+    return { group: g, fingers };
+  }
+  const handL = makeHand(-1);
+  const handR = makeHand(1);
   // poignets côtelés + montre noire au poignet gauche
   const cuffL = makeLimb(0.044, hoodieRib);
   const cuffR = makeLimb(0.044, hoodieRib);
@@ -568,7 +631,7 @@ export function buildScene(scene, screens) {
   const wristR = makeLimb(0.028, skin);
   const watch = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.024, 20), watchMat);
   const watchFace = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.026), new THREE.MeshBasicMaterial({ color: '#111a22' }));
-  person.add(upperL, lowerL, upperR, lowerR, shoulderL, shoulderR, elbowL, elbowR, handL, handR);
+  person.add(upperL, lowerL, upperR, lowerR, shoulderL, shoulderR, elbowL, elbowR, handL.group, handR.group);
   person.add(cuffL, cuffR, wristL, wristR, watch, watchFace);
 
   // Jambes
@@ -597,6 +660,12 @@ export function buildScene(scene, screens) {
   const _b = new THREE.Vector3();
   const _c = new THREE.Vector3();
   const _up = new THREE.Vector3();
+  function placeHand(h, elbow, hand, side) {
+    h.group.position.lerpVectors(elbow, hand, 0.93);
+    const fx = hand.x - elbow.x;
+    const fz = hand.z - elbow.z;
+    h.group.rotation.set(0, Math.atan2(-fx, -fz), side * 0.12, 'YXZ');
+  }
   const shoulderLocalL = new THREE.Vector3(-0.19, 0.5, 0.0);
   const shoulderLocalR = new THREE.Vector3(0.19, 0.5, 0.0);
 
@@ -617,9 +686,8 @@ export function buildScene(scene, screens) {
 
     // main gauche : frappe au clavier ; main droite : souris
     const typing = Math.max(0, Math.sin(t * 14)) * 0.008 * (Math.sin(t * 0.9) > -0.2 ? 1 : 0);
-    hL.set(-0.16 + Math.sin(t * 3.1) * 0.01, 0.8 + typing, -0.44);
-    hR.set(0.36 + Math.sin(t * 0.8) * 0.02, 0.795, -0.4 + Math.cos(t * 0.6) * 0.015);
-    mouse.position.set(hR.x, 0.774, hR.z - 0.02);
+    hL.set(-0.15 + Math.sin(t * 3.1) * 0.01, 0.812 + typing * 0.5, -0.35);
+    hR.set(0.36 + Math.sin(t * 0.8) * 0.02, 0.812, -0.34 + Math.cos(t * 0.6) * 0.015);
 
     eL.set(-0.27, 0.9, 0.08);
     eR.set(0.3, 0.9, 0.1);
@@ -628,7 +696,7 @@ export function buildScene(scene, screens) {
     // avant-bras → poignet côtelé → poignet nu → main
     _a.lerpVectors(eL, hL, 0.74);
     _b.lerpVectors(eL, hL, 0.84);
-    _c.lerpVectors(eL, hL, 0.95);
+    _c.lerpVectors(eL, hL, 0.93);
     setLimb(lowerL, eL, _a);
     setLimb(cuffL, _a, _b);
     setLimb(wristL, _b, _c);
@@ -639,7 +707,7 @@ export function buildScene(scene, screens) {
     setLimb(upperR, sR, eR);
     _a.lerpVectors(eR, hR, 0.74);
     _b.lerpVectors(eR, hR, 0.84);
-    _c.lerpVectors(eR, hR, 0.95);
+    _c.lerpVectors(eR, hR, 0.93);
     setLimb(lowerR, eR, _a);
     setLimb(cuffR, _a, _b);
     setLimb(wristR, _b, _c);
@@ -647,12 +715,28 @@ export function buildScene(scene, screens) {
     shoulderR.position.copy(sR);
     elbowL.position.copy(eL);
     elbowR.position.copy(eR);
-    handL.position.copy(hL);
-    handR.position.copy(hR);
+    // mains : posées au bout du poignet, orientées dans l'axe de l'avant-bras
+    placeHand(handL, eL, hL, -1);
+    placeHand(handR, eR, hR, 1);
+    // gauche : frappe ; droite : doigts sur la souris, clic de l'index de temps en temps
+    handL.fingers.forEach((f, i) => {
+      const tap = Math.max(0, Math.sin(t * 13 + i * 1.9)) * (Math.sin(t * 0.9) > -0.2 ? 0.35 : 0);
+      f.base.rotation.x = -0.32 - tap;
+      f.tip.rotation.x = -0.55;
+    });
+    handR.fingers.forEach((f, i) => {
+      const click = i === 3 && Math.sin(t * 2.3) > 0.96 ? 0.12 : 0;
+      f.base.rotation.x = -0.18 - click;
+      f.tip.rotation.x = -0.4;
+    });
+    // la souris suit la paume droite
+    _a.set(0, -0.026, -0.05).applyQuaternion(handR.group.quaternion).add(handR.group.position);
+    mouse.position.set(_a.x, 0.774, _a.z);
+    mouse.rotation.y = handR.group.rotation.y;
   });
 
   /* ---------- Lumières ---------- */
-  const hemi = new THREE.HemisphereLight('#3a4a8a', '#0a0608', 0.55);
+  const hemi = new THREE.HemisphereLight('#3d4d8f', '#0c080a', 0.78);
   scene.add(hemi);
 
   const moon = new THREE.DirectionalLight('#8ea8ff', 1.3);
@@ -669,7 +753,7 @@ export function buildScene(scene, screens) {
   scene.add(moon, moon.target);
 
   // contre-jour doux pour détacher la silhouette du personnage
-  const rim = new THREE.PointLight('#5b6cff', 1.4, 3.5, 2);
+  const rim = new THREE.PointLight('#6a7bff', 2.3, 3.5, 2);
   rim.position.set(0.6, 1.9, 1.6);
   scene.add(rim);
 

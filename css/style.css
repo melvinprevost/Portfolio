@@ -389,3 +389,50 @@ body.zoomed .hud-nav { opacity: 0; pointer-events: none; transform: translate(-5
   border: 1px solid rgba(74, 222, 128, 0.3);
   vertical-align: 1px;
 }
+
+/* ---------------- Fenêtres affichées DANS les moniteurs (CSS3D) ---------------- */
+#css3d {
+  position: fixed !important;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+#css3d > div { pointer-events: none; }
+.screen-ui {
+  position: relative;
+  overflow: hidden;
+  background: #04060b;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.35s ease, visibility 0.35s;
+}
+.screen-ui:not(.on) { pointer-events: none !important; }
+.screen-ui.on { opacity: 1; visibility: visible; pointer-events: auto; }
+.screen-ui .window {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  transform: none;
+}
+.screen-ui.on .window { animation: crt-on 0.55s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.screen-ui .window-body { padding: clamp(20px, 3vw, 40px) clamp(24px, 4vw, 56px); }
+/* reflet + légères lignes de balayage, comme une vraie dalle */
+.screen-ui::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.035), transparent 40%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.06) 0 1px, transparent 1px 3px);
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.45);
+}
+@keyframes crt-on {
+  0% { transform: scale(1, 0.006); filter: brightness(4); }
+  45% { transform: scale(1, 1); filter: brightness(1.6); }
+  100% { transform: scale(1, 1); filter: none; }
+}
+/* l'animation « pulse » du message d'aide ne doit pas le garder visible une fois dans un écran */
+body.zoomed .hint { animation: none; opacity: 0; }
