@@ -8,6 +8,10 @@ Bureau de nuit en 3D (Three.js) : Melvin de dos devant trois écrans. Depuis le 
 | Centre | Profil : terminal `whoami`, compétences, contact |
 | Droite | CreaVizione : services, réalisations, liens |
 
+## Personnage
+
+Modèle « Leonard » et animation « Typing » issus de [Mixamo](https://www.mixamo.com) (Adobe), convertis en GLB allégé (`assets/leonard-typing.glb`, ~3,3 Mo). Le personnage procédural de `js/scene.js` ne sert plus que de secours si le modèle ne se charge pas.
+
 ## Lancer en local
 
 ```bash

@@ -4,8 +4,9 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
-import { createScreens, SCREEN_PX } from './screens.js?v=8';
-import { buildScene } from './scene.js?v=8';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { createScreens, SCREEN_PX } from './screens.js?v=13';
+import { buildScene } from './scene.js?v=13';
 
 const $ = (s) => document.querySelector(s);
 const loaderText = $('#loader-text');
@@ -59,6 +60,68 @@ const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerH
 
 const screens = createScreens();
 const world = buildScene(scene, screens, { lowPower });
+
+/* ---------- Personnage (modèle Mixamo « Leonard », animation Typing) ---------- */
+// Chargé avant d'afficher la scène ; en cas d'échec, le personnage procédural reste en place.
+setLoad(50, 'installation du personnage');
+let mixer = null;
+try {
+  const gltf = await new GLTFLoader().loadAsync('assets/leonard-typing.glb?v=1');
+  const model = gltf.scene;
+  model.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = true;
+      o.receiveShadow = true;
+      o.frustumCulled = false; // la boîte englobante ne suit pas l'animation
+    }
+  });
+  model.rotation.y = Math.PI; // Mixamo regarde vers +z, le bureau est vers -z
+  scene.add(model);
+  mixer = new THREE.AnimationMixer(model);
+  mixer.clipAction(gltf.animations[0]).play();
+  fitCharacter(model);
+  world.useCharacterModel(model);
+} catch (err) {
+  console.warn('Modèle 3D indisponible, personnage de secours utilisé', err);
+}
+
+// Cale le modèle : mains (en moyenne sur l'animation) au-dessus du clavier, bassin sur l'assise
+function fitCharacter(model) {
+  const find = (part) => {
+    let found = null;
+    model.traverse((o) => { if (!found && o.isBone && o.name.toLowerCase().endsWith(part)) found = o; });
+    return found;
+  };
+  const hips = find('hips');
+  const lHand = find('lefthand');
+  const rHand = find('righthand');
+  const hands = new THREE.Vector3();
+  const hip = new THREE.Vector3();
+  const tmp = new THREE.Vector3();
+  const N = 12;
+  const dur = mixer._actions[0].getClip().duration;
+  for (let i = 0; i < N; i++) {
+    mixer.setTime((i / N) * dur);
+    model.updateMatrixWorld(true);
+    hands.add(lHand.getWorldPosition(tmp)).add(rHand.getWorldPosition(tmp));
+    hip.add(hips.getWorldPosition(tmp));
+  }
+  hands.divideScalar(2 * N);
+  hip.divideScalar(N);
+  mixer.setTime(0);
+  // cible : milieu du clavier, juste au-dessus des touches
+  const target = new THREE.Vector3(-0.06, 0.83, -0.43);
+  model.position.add(target.clone().sub(hands));
+  model.updateMatrixWorld(true);
+  const hipAfter = hip.clone().add(target.clone().sub(hands));
+  if (window.__fitLog !== undefined || new URLSearchParams(location.search).has('debug')) {
+    window.__fit = { hands: hands.toArray(), hip: hip.toArray(), hipAfter: hipAfter.toArray(), pos: model.position.toArray() };
+  }
+  // l'assise de la chaise suit la hauteur du bassin (dessus de l'assise ≈ 0.52 m par défaut)
+  const seatTop = 0.52;
+  world.chair.position.y = THREE.MathUtils.clamp(hipAfter.y - 0.09 - seatTop, -0.12, 0.12);
+  world.chair.position.z = 0.3 + THREE.MathUtils.clamp(hipAfter.z - 0.3, -0.15, 0.15);
+}
 setLoad(70, 'allumage des écrans');
 
 /* ---------- Post-traitement (bloom) ---------- */
@@ -478,9 +541,13 @@ window.addEventListener('resize', () => {
 const clock = new THREE.Clock();
 const smoothParallax = new THREE.Vector2();
 
+let lastT = 0;
 function frame() {
   const t = clock.getElapsedTime();
+  const deltaT = Math.min(0.1, t - lastT);
+  lastT = t;
   world.update(t);
+  if (mixer) mixer.update(deltaT);
   Object.values(screens).forEach((s) => s.update(t));
 
   if (state.tween) {

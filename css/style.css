@@ -655,3 +655,10 @@ body.phone .panel-creavizione .window { background: #0a0507; }
   .edu-grid { gap: 12px; }
   .edu-grid article { padding: 18px; }
 }
+
+/* Liens GitHub + LinkedIn dans l'en-tête */
+.hud-links { display: flex; gap: 8px; pointer-events: auto; }
+body.phone .hud-links { gap: 6px; }
+@media (max-width: 380px) {
+  body.phone .hud-link { padding: 6px 10px; font-size: 11.5px; }
+}

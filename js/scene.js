@@ -1,7 +1,7 @@
 // Construction du bureau de nuit : pièce, bureau, 3 écrans, chaise, personnage de dos, décor.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { neonTexture, cityTexture } from './screens.js?v=8';
+import { neonTexture, cityTexture } from './screens.js?v=13';
 
 const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.05, ...opts });
 
@@ -33,6 +33,47 @@ function joint(r, material) {
   const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), material);
   m.castShadow = true;
   return m;
+}
+
+// Texture « molleton / jersey » générée : fines côtes verticales + grain + légères bouloches.
+// Utilisée comme couleur (map) et relief (bumpMap) pour que le sweat paraisse en tissu.
+function fabricTexture(kind = 'fleece') {
+  const S = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(S, S);
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      let v;
+      if (kind === 'rib') {
+        // bord-côte : côtes verticales marquées
+        const rib = 0.5 + 0.5 * Math.sin((x * Math.PI * 2) / 5);
+        v = 190 + rib * 40 + (Math.random() - 0.5) * 18;
+      } else {
+        // molleton : grain très fin et doux, sans motif tricoté
+        v = 228 + (Math.random() - 0.5) * 26;
+      }
+      const i = (y * S + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = Math.max(0, Math.min(255, v));
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  if (kind !== 'rib') {
+    // légères variations de teinte (tissu un peu porté)
+    for (let k = 0; k < 160; k++) {
+      ctx.fillStyle = `rgba(0,0,0,${Math.random() * 0.035})`;
+      ctx.beginPath();
+      ctx.arc(Math.random() * S, Math.random() * S, 6 + Math.random() * 22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(kind === 'rib' ? 8 : 3, kind === 'rib' ? 2 : 3);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 /* ============================================================ */
@@ -445,10 +486,12 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
   /* ---------- Personnage (Melvin, de dos) ---------- */
   // D'après photos : cheveux brun foncé ondulés et volumineux sur le dessus,
   // courts/dégradés sur les côtés et la nuque, oreilles visibles, carrure fine,
-  // sweat à capuche basique (capuche baissée), pantalon marine, montre noire à gauche.
-  const hoodie = mat('#33363f', { roughness: 0.92 });
-  const hoodieRib = mat('#23262d', { roughness: 0.95 });
-  const hoodieInner = mat('#1b1d23', { roughness: 0.95, side: THREE.DoubleSide });
+  // sweat à capuche basique (capuche relevée), pantalon marine, montre noire à gauche.
+  const fabric = fabricTexture('fleece');
+  const ribTex = fabricTexture('rib');
+  const hoodie = mat('#3d404a', { roughness: 0.97, map: fabric, bumpMap: fabric, bumpScale: 0.35 });
+  const hoodieRib = mat('#33363f', { roughness: 0.97, map: ribTex, bumpMap: ribTex, bumpScale: 1.2 });
+  const hoodieInner = mat('#24262d', { roughness: 1, map: fabric, side: THREE.BackSide });
   const pants = mat('#1a2133', { roughness: 0.85 });
   const skin = mat('#c99a80', { roughness: 0.9 });
   const hairDark = mat('#2e1f16', { roughness: 0.82 });
@@ -475,38 +518,16 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
   waist.position.set(0, 0.1, 0);
   torsoPivot.add(waist);
 
-  // Col du sweat autour de la nuque
-  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.068, 0.026, 12, 28), hoodie);
-  collar.rotation.x = Math.PI / 2 - 0.15;
-  collar.scale.set(1.1, 1, 1);
-  collar.position.set(0, 0.6, 0.01);
-  torsoPivot.add(collar);
-
-  // Capuche baissée, posée à plat sur le haut du dos
-  const hoodShell = new THREE.Mesh(
-    new THREE.SphereGeometry(0.13, 28, 16, 0, Math.PI * 2, 0, Math.PI / 2),
-    hoodie
+  // Encolure : la capuche relevée descend jusqu'aux épaules et enveloppe la nuque
+  const drape = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.098, 0.15, 0.18, 32, 1, true),
+    mat('#3d404a', { roughness: 0.97, map: fabric, bumpMap: fabric, bumpScale: 0.35, side: THREE.DoubleSide })
   );
-  hoodShell.material = hoodie.clone();
-  hoodShell.material.side = THREE.DoubleSide;
-  hoodShell.rotation.x = Math.PI / 2 - 0.35;
-  hoodShell.scale.set(1.12, 0.42, 1.0);
-  hoodShell.position.set(0, 0.5, 0.11);
-  hoodShell.castShadow = true;
-  torsoPivot.add(hoodShell);
-  // ourlet de la capuche (bord légèrement épais)
-  const hoodRim = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.014, 8, 36), hoodieRib);
-  hoodRim.rotation.copy(hoodShell.rotation);
-  hoodRim.rotation.x -= Math.PI / 2;
-  hoodRim.scale.set(1.12, 1.0, 1);
-  hoodRim.position.copy(hoodShell.position);
-  torsoPivot.add(hoodRim);
-  // intérieur sombre de la capuche, visible depuis la caméra en hauteur
-  const hoodInside = new THREE.Mesh(new THREE.CircleGeometry(0.12, 28), hoodieInner);
-  hoodInside.rotation.copy(hoodRim.rotation);
-  hoodInside.scale.set(1.1, 0.95, 1);
-  hoodInside.position.copy(hoodShell.position).add(new THREE.Vector3(0, 0, -0.004));
-  torsoPivot.add(hoodInside);
+  drape.position.set(0, 0.63, 0.012);
+  drape.rotation.x = -0.08;
+  drape.scale.set(1.12, 1, 1.05);
+  drape.castShadow = true;
+  torsoPivot.add(drape);
 
   // Cou
   const neck = makeLimb(0.056, skin);
@@ -611,6 +632,88 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
   topHair.castShadow = true;
   head.add(topHair);
 
+  // ----- Capuche relevée -----
+  // Ample (elle ne colle pas au crâne), avec la silhouette d'une vraie capuche :
+  // vue de dos en « goutte » (étroite en haut, évasée vers les épaules), une pointe à
+  // l'arrière du sommet là où les deux pans se rejoignent, un bord avant qui avance
+  // devant le visage, l'arrière qui retombe sur la nuque et quelques grands plis en bas.
+  const HC = new THREE.Vector3(0, 0.035, 0.02);
+  const HR = new THREE.Vector3(0.12, 0.134, 0.13);
+  const faceOpen = (d) => d.z < -0.12 && (d.x / 0.62) ** 2 + ((d.y + 0.14) / 0.74) ** 2 < 1;
+  const deformHood = (v) => {
+    const y0 = v.y;
+    const z0 = v.z;
+    v.x *= 1 - 0.2 * Math.max(0, y0) + 0.32 * Math.max(0, -y0 - 0.15); // goutte
+    const crown = Math.max(0, y0 + 0.1) * Math.max(0, z0 + 0.1); // pointe arrière du sommet
+    v.y += 0.07 * crown;
+    v.z += 0.12 * crown;
+    // arête le long de la couture centrale, à l'arrière
+    v.z += 0.06 * Math.max(0, z0) * Math.max(0, 1 - Math.abs(v.x) * 3) * Math.max(0, y0 + 0.3);
+    if (y0 < 0) {
+      // l'arrière retombe vers les épaules en s'écartant de la nuque
+      const b = Math.max(0, z0 + 0.3);
+      v.z += 0.22 * b * -y0;
+      v.y -= 0.1 * b * -y0;
+    }
+    v.z -= 0.22 * Math.max(0, -z0 - 0.45); // le bord avance devant le visage
+    const fold = 0.018 * Math.sin(Math.atan2(v.x, v.z) * 3 + 0.8) * Math.max(0, -y0 - 0.4); // plis souples du bas
+    v.x *= 1 + fold;
+    v.z *= 1 + fold;
+    return v;
+  };
+  const hoodGeo = cutSphere(1, 120, 80, (d) => d.y > -0.95 && !faceOpen(d));
+  {
+    const pos = hoodGeo.attributes.position;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      deformHood(v.fromBufferAttribute(pos, i));
+      pos.setXYZ(i, v.x, v.y, v.z);
+    }
+    hoodGeo.computeVertexNormals();
+  }
+  const hoodOuter = new THREE.Mesh(hoodGeo, hoodie);
+  hoodOuter.scale.copy(HR);
+  hoodOuter.position.copy(HC);
+  hoodOuter.castShadow = true;
+  head.add(hoodOuter);
+  const hoodIn = new THREE.Mesh(hoodGeo, hoodieInner); // doublure plus sombre, vue par l'ouverture
+  hoodIn.scale.copy(HR).multiplyScalar(0.965);
+  hoodIn.position.copy(HC);
+  head.add(hoodIn);
+
+  const onHood = (d, k = 1) => deformHood(d.clone()).multiply(HR).multiplyScalar(k).add(HC);
+  // ourlet autour de l'ouverture du visage
+  const hemPts = [];
+  for (let i = 0; i <= 40; i++) {
+    const phi = -Math.PI / 2 + 0.42 + (i / 40) * (2 * Math.PI - 0.84);
+    const dx = 0.62 * Math.cos(phi);
+    const dy = -0.14 + 0.74 * Math.sin(phi);
+    const dz = -Math.sqrt(Math.max(0, 1 - dx * dx - dy * dy));
+    hemPts.push(onHood(new THREE.Vector3(dx, dy, dz), 0.985));
+  }
+  const hem = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(hemPts), 80, 0.013, 10, false), hoodieRib);
+  hem.castShadow = true;
+  head.add(hem);
+  // couture centrale, du front jusqu'à la nuque
+  const seamPts = [];
+  for (let i = 0; i <= 24; i++) {
+    const th = -0.85 + (i / 24) * 3.5;
+    seamPts.push(onHood(new THREE.Vector3(0, Math.cos(th), Math.sin(th)), 1.012));
+  }
+  head.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(seamPts), 80, 0.0035, 6, false), mat('#2a2c33', { roughness: 1 })));
+  // cordons qui pendent de part et d'autre du visage
+  const cordMat = mat('#d9d6cf', { roughness: 0.8 });
+  [hemPts[0], hemPts[hemPts.length - 1]].forEach((p0) => {
+    const cord = makeLimb(0.004, cordMat);
+    const p1 = p0.clone().add(new THREE.Vector3(0, -0.13, -0.01));
+    setLimb(cord, p0, p1);
+    head.add(cord);
+    const aglet = joint(0.006, mat('#9a9aa0', { roughness: 0.4, metalness: 0.6 }));
+    aglet.scale.set(1, 2, 1);
+    aglet.position.copy(p1);
+    head.add(aglet);
+  });
+
   // Bras (recalculés à chaque frame pour l'animation)
   const upperL = makeLimb(0.052, hoodie);
   const lowerL = makeLimb(0.045, hoodie);
@@ -710,7 +813,9 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
   const shoulderLocalL = new THREE.Vector3(-0.19, 0.5, 0.0);
   const shoulderLocalR = new THREE.Vector3(0.19, 0.5, 0.0);
 
+  let characterModel = null; // modèle Mixamo : remplace ce personnage procédural une fois chargé
   updaters.push((t) => {
+    if (characterModel) return;
     // respiration + légère oscillation
     const breath = Math.sin(t * 1.6) * 0.012;
     torso.scale.set(1.34 + breath * 0.5, 1 + breath, 0.84 + breath);
@@ -718,7 +823,7 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
     torsoPivot.rotation.y = Math.sin(t * 0.23) * 0.03;
     // la tête regarde d'un écran à l'autre de temps en temps
     const look = Math.sin(t * 0.18) * 0.9;
-    head.rotation.y = THREE.MathUtils.clamp(look, -0.38, 0.38);
+    head.rotation.y = THREE.MathUtils.clamp(look, -0.25, 0.25);
     head.rotation.x = 0.08 + Math.sin(t * 0.7) * 0.02;
 
     torsoPivot.updateMatrixWorld();
@@ -801,6 +906,13 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
   return {
     monitors,
     occluders: [person, chair], // masqués quand la caméra doit passer à travers (mobile)
+    chair,
+    // Remplace le personnage procédural par un modèle importé (Mixamo)
+    useCharacterModel(model) {
+      characterModel = model;
+      person.visible = false;
+      this.occluders[0] = model;
+    },
     update(t) {
       updaters.forEach((fn) => fn(t));
     },
