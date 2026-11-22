@@ -303,21 +303,26 @@ function creavizioneScreen() {
 
 /* ---------------- Néon mural « CreaVizione » ---------------- */
 export function neonTexture() {
+  // « Portfolio » en néon violet : s'accorde avec le bandeau LED et la lumière bleutée de la pièce,
+  // sans reprendre les couleurs des trois écrans (cyan, vert, bordeaux).
   const c = document.createElement('canvas');
   c.width = 1024;
   c.height = 256;
   const ctx = c.getContext('2d');
-  ctx.clearRect(0, 0, c.width, c.height);
-  ctx.font = '700 120px "Josefin Sans"';
+  ctx.font = '400 150px "Tilt Neon", "Josefin Sans", sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.shadowColor = '#ff2a55';
-  ctx.shadowBlur = 30;
-  ctx.fillStyle = '#ff6b88';
-  ctx.fillText('CreaVizione', 512, 128);
+  // halo large, puis halo serré, puis le tube presque blanc
+  ctx.shadowColor = '#7c5cff';
+  ctx.shadowBlur = 42;
+  ctx.fillStyle = '#8a6dff';
+  ctx.fillText('Portfolio', 512, 132);
+  ctx.shadowBlur = 16;
+  ctx.fillStyle = '#a48dff';
+  ctx.fillText('Portfolio', 512, 132);
   ctx.shadowBlur = 0;
-  ctx.fillStyle = '#ffd6de';
-  ctx.fillText('CreaVizione', 512, 128);
+  ctx.fillStyle = '#d6caff';
+  ctx.fillText('Portfolio', 512, 132);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;

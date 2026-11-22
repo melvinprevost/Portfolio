@@ -1,7 +1,7 @@
 // Construction du bureau de nuit : pièce, bureau, 3 écrans, chaise, personnage de dos, décor.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { neonTexture, cityTexture } from './screens.js?v=6';
+import { neonTexture, cityTexture } from './screens.js?v=8';
 
 const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.05, ...opts });
 
@@ -130,9 +130,49 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
     new THREE.MeshBasicMaterial({ color: '#6d5dfc', transparent: true, opacity: 0.55 })
   );
   keyGlow.rotation.x = -Math.PI / 2;
-  keyGlow.position.set(-0.06, 0.788, -0.44);
+  keyGlow.position.set(-0.06, 0.7878, -0.44);
   scene.add(keyGlow);
   updaters.push((t) => keyGlow.material.color.setHSL((0.7 + t * 0.03) % 1, 0.8, 0.55));
+
+  // Touches : disposition type clavier (rangée de fonctions + 5 rangées, barre d'espace).
+  // Une seule géométrie instanciée ; le rétroéclairage passe entre les touches.
+  const layout = [
+    { units: [1.4, ...Array(15).fill(1)], depth: 0.6 }, // Échap + F1–F12…
+    { units: [...Array(14).fill(1), 2] },
+    { units: [1.5, ...Array(13).fill(1), 1.5] },
+    { units: [1.75, ...Array(12).fill(1), 2.25] },
+    { units: [2.25, ...Array(11).fill(1), 2.75] },
+    { units: [1.25, 1.25, 1.25, 6.25, 1.25, 1.25, 1.25, 1.25] },
+  ];
+  const U = 0.0262; // pas d'une touche
+  const keyCount = layout.reduce((n, r) => n + r.units.length, 0);
+  const keyMat = mat('#1c1f29', { roughness: 0.55 });
+  const keys = new THREE.InstancedMesh(new RoundedBoxGeometry(1, 1, 1, 2, 0.14), keyMat, keyCount);
+  keys.castShadow = true;
+  const kM = new THREE.Matrix4();
+  const kQ = new THREE.Quaternion();
+  const kP = new THREE.Vector3();
+  const kS = new THREE.Vector3();
+  const accentKey = new THREE.Color('#c4365a');
+  const baseKey = new THREE.Color('#1c1f29');
+  let ki = 0;
+  layout.forEach((row, r) => {
+    const total = row.units.reduce((a, b) => a + b, 0);
+    let x = -0.06 - (total * U) / 2;
+    const z = -0.495 + r * 0.0212 + (r === 0 ? 0.002 : 0.005);
+    row.units.forEach((u, c) => {
+      kP.set(x + (u * U) / 2, 0.7925, z);
+      kS.set(u * U - 0.0045, 0.0075, (row.depth || 1) * 0.0172);
+      kM.compose(kP, kQ, kS);
+      keys.setMatrixAt(ki, kM);
+      keys.setColorAt(ki, r === 0 && c === 0 ? accentKey : baseKey); // Échap en couleur
+      x += u * U;
+      ki++;
+    });
+  });
+  keys.instanceMatrix.needsUpdate = true;
+  keys.instanceColor.needsUpdate = true;
+  scene.add(keys);
 
   // Souris
   const mouse = new THREE.Mesh(new THREE.SphereGeometry(0.035, 20, 14), mat('#101219', { roughness: 0.35 }));
@@ -203,15 +243,16 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
     new THREE.MeshBasicMaterial({ map: neonTexture(), transparent: true, toneMapped: false })
   );
   neon.position.set(0, 1.86, -1.085);
+  neon.material.color.setScalar(0.88); // garde la teinte violette sous le bloom
   scene.add(neon);
-  const neonLight = new THREE.PointLight('#ff2a55', 1.4, 2.4, 2);
+  const neonLight = new THREE.PointLight('#8b6cff', 1.6, 2.4, 2);
   neonLight.position.set(0, 1.86, -0.85);
   scene.add(neonLight);
   updaters.push((t) => {
     // petit grésillement occasionnel du néon
     const flick = Math.sin(t * 37) > 0.97 && Math.sin(t * 1.3) > 0.6 ? 0.35 : 1;
     neon.material.opacity = flick;
-    neonLight.intensity = 1.4 * flick;
+    neonLight.intensity = 1.6 * flick;
   });
 
   /* ---------- Lampe de bureau ---------- */
@@ -686,7 +727,7 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
 
     // main gauche : frappe au clavier ; main droite : souris
     const typing = Math.max(0, Math.sin(t * 14)) * 0.008 * (Math.sin(t * 0.9) > -0.2 ? 1 : 0);
-    hL.set(-0.15 + Math.sin(t * 3.1) * 0.01, 0.812 + typing * 0.5, -0.35);
+    hL.set(-0.15 + Math.sin(t * 3.1) * 0.01, 0.824 + typing * 0.5, -0.35);
     hR.set(0.36 + Math.sin(t * 0.8) * 0.02, 0.812, -0.34 + Math.cos(t * 0.6) * 0.015);
 
     eL.set(-0.27, 0.9, 0.08);

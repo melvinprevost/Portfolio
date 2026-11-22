@@ -4,8 +4,8 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
-import { createScreens, SCREEN_PX } from './screens.js?v=6';
-import { buildScene } from './scene.js?v=6';
+import { createScreens, SCREEN_PX } from './screens.js?v=8';
+import { buildScene } from './scene.js?v=8';
 
 const $ = (s) => document.querySelector(s);
 const loaderText = $('#loader-text');
@@ -24,6 +24,7 @@ const fonts = [
   '600 26px "JetBrains Mono"',
   '700 76px "Josefin Sans"',
   '600 21px "Josefin Sans"',
+  '400 150px "Tilt Neon"',
 ];
 await Promise.race([
   Promise.all(fonts.map((f) => document.fonts.load(f))),
