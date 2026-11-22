@@ -1,7 +1,7 @@
 // Construction du bureau de nuit : pièce, bureau, 3 écrans, chaise, personnage de dos, décor.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { neonTexture, cityTexture } from './screens.js?v=3';
+import { neonTexture, cityTexture } from './screens.js?v=6';
 
 const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.05, ...opts });
 
@@ -37,7 +37,7 @@ function joint(r, material) {
 
 /* ============================================================ */
 
-export function buildScene(scene, screens) {
+export function buildScene(scene, screens, { lowPower = false } = {}) {
   const updaters = [];
 
   /* ---------- Pièce ---------- */
@@ -242,7 +242,7 @@ export function buildScene(scene, screens) {
   lampLight.position.set(-1.0, 1.17, -0.52);
   lampLight.target.position.set(-0.7, 0.76, -0.4);
   lampLight.castShadow = true;
-  lampLight.shadow.mapSize.set(1024, 1024);
+  lampLight.shadow.mapSize.setScalar(lowPower ? 512 : 1024);
   lampLight.shadow.bias = -0.0008;
   scene.add(lampLight, lampLight.target);
 
@@ -743,7 +743,7 @@ export function buildScene(scene, screens) {
   moon.position.set(-4, 3.2, 0.6);
   moon.target.position.set(0.3, 0.6, 0.1);
   moon.castShadow = true;
-  moon.shadow.mapSize.set(2048, 2048);
+  moon.shadow.mapSize.setScalar(lowPower ? 1024 : 2048);
   moon.shadow.camera.left = -2.5;
   moon.shadow.camera.right = 2.5;
   moon.shadow.camera.top = 2.5;
@@ -759,6 +759,7 @@ export function buildScene(scene, screens) {
 
   return {
     monitors,
+    occluders: [person, chair], // masqués quand la caméra doit passer à travers (mobile)
     update(t) {
       updaters.forEach((fn) => fn(t));
     },

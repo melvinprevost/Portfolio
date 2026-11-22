@@ -4,8 +4,8 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
-import { createScreens } from './screens.js?v=3';
-import { buildScene } from './scene.js?v=3';
+import { createScreens, SCREEN_PX } from './screens.js?v=6';
+import { buildScene } from './scene.js?v=6';
 
 const $ = (s) => document.querySelector(s);
 const loaderText = $('#loader-text');
@@ -30,11 +30,20 @@ await Promise.race([
   new Promise((r) => setTimeout(r, 2500)),
 ]);
 
+/* ---------- Téléphone ? ---------- */
+// Version dédiée : écran étroit, ou écran tactile de petite taille (portrait comme paysage)
+const isPhone = () =>
+  window.innerWidth < 760 ||
+  (window.matchMedia('(pointer: coarse)').matches && Math.min(window.innerWidth, window.innerHeight) < 500);
+let phone = isPhone();
+document.body.classList.toggle('phone', phone);
+const lowPower = phone;
+
 /* ---------- Renderer ---------- */
 setLoad(35, 'montage du bureau');
 const canvas = $('#scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, lowPower ? 1.5 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.3;
@@ -48,7 +57,7 @@ scene.fog = new THREE.Fog('#04050b', 6, 12);
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.02, 30);
 
 const screens = createScreens();
-const world = buildScene(scene, screens);
+const world = buildScene(scene, screens, { lowPower });
 setLoad(70, 'allumage des écrans');
 
 /* ---------- Post-traitement (bloom) ---------- */
@@ -70,7 +79,26 @@ function homePose() {
     target: new THREE.Vector3(0, 1.02, -0.75),
   };
 }
-let home = homePose();
+// Téléphone en portrait : la caméra cadre un moniteur à la fois (celui de la carte affichée),
+// en hauteur derrière l'épaule, l'écran placé dans le haut de l'image au-dessus des cartes.
+const portrait = () => window.innerWidth / window.innerHeight < 1;
+function phonePose(key) {
+  camera.fov = 40; // focale plus longue : la tête au premier plan paraît moins grosse
+  camera.updateProjectionMatrix();
+  const m = monitorsByKeyEarly[key];
+  m.screen.updateMatrixWorld();
+  const center = m.screen.getWorldPosition(new THREE.Vector3());
+  const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(m.screen.getWorldQuaternion(new THREE.Quaternion()));
+  const halfTan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
+  const dist = (m.width / 2 / 0.86) / halfTan; // le moniteur occupe ~86 % de la largeur
+  return {
+    pos: center.clone().addScaledVector(normal, dist).add(new THREE.Vector3(0, 0.95, 0)),
+    target: center.clone().add(new THREE.Vector3(0, -0.5, 0)),
+  };
+}
+const monitorsByKeyEarly = Object.fromEntries(world.monitors.map((m) => [m.key, m]));
+const restPose = () => (phone && portrait() ? phonePose(state.phoneSel) : homePose());
+let home;
 const camPos = new THREE.Vector3(1.6, 2.3, 4.2); // départ de l'intro
 const camTarget = new THREE.Vector3(0, 1.1, -0.7);
 camera.position.copy(camPos);
@@ -85,12 +113,15 @@ const state = {
   parallax: new THREE.Vector2(),
   tween: null,
   inScreen: false,
+  phoneSel: 'profil', // carte affichée sur téléphone
 };
+home = restPose();
 
 const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
 
-function tweenCamera(toPos, toTarget, duration, done) {
+function tweenCamera(toPos, toTarget, duration, done, midway) {
   state.tween = {
+    midway, // { at: 0..1, fn } : action déclenchée en cours de trajet
     fromPos: camPos.clone(),
     fromTarget: camTarget.clone(),
     toPos,
@@ -107,7 +138,7 @@ const screenMeshes = world.monitors.map((m) => m.screen);
 
 // Sur grand écran, la fenêtre s'affiche DANS le moniteur 3D (CSS3D, interactive).
 // Sur téléphone / écran étroit, elle s'ouvre en plein écran pour rester lisible.
-const inScreenMode = () => window.innerWidth >= 760 && window.innerWidth / window.innerHeight >= 1;
+const inScreenMode = () => !phone && window.innerWidth >= 760 && window.innerWidth / window.innerHeight >= 1;
 const FILL = 1.12; // l'écran occupe ~1/FILL de la vue : on garde le cadre du moniteur visible
 
 const cssRenderer = new CSS3DRenderer();
@@ -152,9 +183,12 @@ function poseForScreen(m, fill) {
   return { pos: center.clone().addScaledVector(normal, dist), target: center };
 }
 
+// Références fixes : la fenêtre change de parent (moniteur 3D ou panneau plein écran)
+const windows = Object.fromEntries(world.monitors.map((m) => [m.key, $(`#panel-${m.key} .window`)]));
+
 function openWindow(key) {
   const panel = $(`#panel-${key}`);
-  const win = panel.querySelector('.window');
+  const win = windows[key];
   if (state.inScreen) {
     const { wrapper } = screenUI[key];
     sizeScreenUI(key);
@@ -184,33 +218,165 @@ function enterScreen(key) {
   state.inScreen = inScreenMode();
   setHover(null);
   document.body.classList.add('zoomed');
-  const pose = poseForScreen(m, state.inScreen ? FILL : 0.92);
-  tweenCamera(pose.pos, pose.target, 1300, () => {
-    state.mode = 'inside';
-    openWindow(key);
-  });
+  const pose = poseForScreen(m, FILL);
+  // Écran étroit : la caméra recule davantage et traverserait le personnage → on le masque
+  state.hideOccluders = pose.pos.distanceTo(pose.target) > 0.8;
+  const hide = () => world.occluders.forEach((o) => (o.visible = false));
+  tweenCamera(
+    pose.pos,
+    pose.target,
+    1300,
+    () => {
+      state.mode = 'focus';
+      document.body.classList.add('focus');
+    },
+    state.hideOccluders ? { at: 0.3, fn: hide } : undefined
+  );
 }
 
-function leaveScreen() {
-  if (state.mode !== 'inside') return;
+// Ouvre la fenêtre (depuis le bouton « Cliquer pour… » de l'avant-goût)
+function openFromTeaser() {
+  if (state.mode !== 'focus') return;
+  screens[state.active].setHover(false);
+  canvas.style.cursor = 'default';
+  document.body.classList.remove('focus');
+  state.mode = 'inside';
+  state.inScreen = inScreenMode();
+  openWindow(state.active);
+}
+
+function leaveScreen(fromHistory = false) {
+  if (state.mode !== 'inside' && state.mode !== 'focus') return;
+  // Le panneau téléphone a ajouté une entrée d'historique : on la consomme (geste retour)
+  if (!fromHistory && history.state && history.state.sheet) {
+    history.back();
+    return;
+  }
   closeWindow(state.active);
+  screens[state.active].setHover(false);
+  canvas.style.cursor = 'default';
+  document.body.classList.remove('focus');
   state.mode = 'leaving';
-  home = homePose();
+  home = restPose();
   setTimeout(() => {
-    tweenCamera(home.pos.clone(), home.target.clone(), 1200, () => {
-      state.mode = 'home';
-      state.active = null;
-      document.body.classList.remove('zoomed');
-    });
+    const show = () => world.occluders.forEach((o) => (o.visible = true));
+    tweenCamera(
+      home.pos.clone(),
+      home.target.clone(),
+      1200,
+      () => {
+        show();
+        state.mode = 'home';
+        state.active = null;
+        document.body.classList.remove('zoomed');
+      },
+      state.hideOccluders ? { at: 0.7, fn: show } : undefined
+    );
   }, 280);
 }
 
-document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', leaveScreen));
+document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => leaveScreen()));
 document.querySelectorAll('.hud-nav button').forEach((b) =>
   b.addEventListener('click', () => enterScreen(b.dataset.screen))
 );
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') leaveScreen();
+});
+window.addEventListener('popstate', () => leaveScreen(true));
+
+// Sur écran tactile : « Touchez » plutôt que « Cliquez / Échap »
+if (window.matchMedia('(hover: none)').matches) {
+  $('#hint').textContent = 'Touchez un écran pour y entrer';
+  $('.back-hint').textContent = "Touchez à côté de l'écran pour revenir au bureau";
+}
+
+/* ---------- Version téléphone ---------- */
+const cards = $('#cards');
+const cardEls = [...cards.querySelectorAll('.card')];
+const dots = [...document.querySelectorAll('.card-dots i')];
+
+function selectPhone(key, animate = true) {
+  if (!key) return;
+  const changed = key !== state.phoneSel;
+  state.phoneSel = key;
+  dots.forEach((d, i) => d.classList.toggle('on', cardEls[i].dataset.screen === key));
+  if (!phone) return;
+  setHover(key); // l'écran correspondant s'illumine
+  if (state.mode === 'home' && changed) {
+    home = restPose();
+    if (animate) tweenCamera(home.pos.clone(), home.target.clone(), 750);
+  }
+}
+function scrollToCard(key) {
+  const el = cardEls.find((c) => c.dataset.screen === key);
+  if (el) cards.scrollTo({ left: el.offsetLeft - (cards.clientWidth - el.clientWidth) / 2, behavior: 'smooth' });
+  selectPhone(key);
+}
+let scrollRaf = 0;
+cards.addEventListener('scroll', () => {
+  cancelAnimationFrame(scrollRaf);
+  scrollRaf = requestAnimationFrame(() => {
+    const mid = cards.scrollLeft + cards.clientWidth / 2;
+    let best = cardEls[0];
+    cardEls.forEach((c) => {
+      if (Math.abs(c.offsetLeft + c.clientWidth / 2 - mid) < Math.abs(best.offsetLeft + best.clientWidth / 2 - mid)) best = c;
+    });
+    selectPhone(best.dataset.screen);
+  });
+});
+// paysage : toucher une carte la sélectionne
+cardEls.forEach((c) => c.addEventListener('click', (e) => {
+  if (!e.target.closest('.card-open')) selectPhone(c.dataset.screen);
+}));
+
+// Ouvrir : la caméra plonge vers l'écran, le panneau monte depuis le bas
+function openPhone(key) {
+  if (state.mode !== 'home') return;
+  selectPhone(key, false);
+  const m = monitorsByKey[key];
+  state.mode = 'zooming';
+  state.active = key;
+  state.inScreen = false;
+  state.hideOccluders = true;
+  setHover(null);
+  document.body.classList.add('zoomed');
+  const pose = poseForScreen(m, 0.95);
+  tweenCamera(pose.pos, pose.target, 1000, null, {
+    at: 0.25,
+    fn: () => world.occluders.forEach((o) => (o.visible = false)),
+  });
+  setTimeout(() => {
+    if (state.active !== key) return;
+    state.mode = 'inside';
+    history.pushState({ sheet: key }, '');
+    openWindow(key);
+  }, 380);
+}
+document.querySelectorAll('.card-open').forEach((b) => b.addEventListener('click', () => openPhone(b.dataset.open)));
+
+// Glisser la barre du panneau vers le bas pour le fermer
+Object.values(windows).forEach((win) => {
+  const bar = win.querySelector('.titlebar');
+  let y0 = null;
+  let dy = 0;
+  bar.addEventListener('touchstart', (e) => {
+    if (!phone || e.target.closest('[data-close]')) return;
+    y0 = e.touches[0].clientY;
+    dy = 0;
+    win.style.transition = 'none';
+  }, { passive: true });
+  bar.addEventListener('touchmove', (e) => {
+    if (y0 === null) return;
+    dy = Math.max(0, e.touches[0].clientY - y0);
+    win.style.transform = `translateY(${dy}px)`;
+  }, { passive: true });
+  bar.addEventListener('touchend', () => {
+    if (y0 === null) return;
+    y0 = null;
+    win.style.transition = '';
+    win.style.transform = '';
+    if (dy > 110) leaveScreen();
+  });
 });
 
 /* ---------- Survol / clic ---------- */
@@ -234,11 +400,25 @@ function setHover(key) {
   }
 }
 
-function pick(clientX, clientY) {
+function raycastScreens(clientX, clientY) {
   state.pointer.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
   raycaster.setFromCamera(state.pointer, camera);
-  const hit = raycaster.intersectObjects(screenMeshes, false)[0];
+  return raycaster.intersectObjects(screenMeshes, false)[0] || null;
+}
+function pick(clientX, clientY) {
+  const hit = raycastScreens(clientX, clientY);
   return hit ? hit.object.userData.key : null;
+}
+// En mode focus : le pointeur est-il sur l'écran actif, et sur son bouton ?
+function focusHit(clientX, clientY) {
+  const hit = raycastScreens(clientX, clientY);
+  if (!hit || hit.object.userData.key !== state.active) return { onScreen: false, onCTA: false };
+  const r = screens[state.active].cta;
+  const x = hit.uv.x * SCREEN_PX.W;
+  const y = (1 - hit.uv.y) * SCREEN_PX.H;
+  const pad = 18; // marge pour viser facilement, surtout au doigt
+  const onCTA = !!r && x > r.x - pad && x < r.x + r.w + pad && y > r.y - pad && y < r.y + r.h + pad;
+  return { onScreen: true, onCTA };
 }
 
 canvas.addEventListener('pointermove', (e) => {
@@ -246,13 +426,31 @@ canvas.addEventListener('pointermove', (e) => {
   tooltip.style.left = e.clientX + 'px';
   tooltip.style.top = e.clientY + 'px';
   if (state.mode === 'home' && e.pointerType === 'mouse') setHover(pick(e.clientX, e.clientY));
+  if (state.mode === 'focus') {
+    const { onCTA } = focusHit(e.clientX, e.clientY);
+    screens[state.active].setHover(onCTA);
+    canvas.style.cursor = onCTA ? 'pointer' : 'default';
+  }
 });
 canvas.addEventListener('pointerleave', () => setHover(null));
 canvas.addEventListener('click', (e) => {
   if (state.mode === 'inside' && state.inScreen) return leaveScreen(); // clic hors de l'écran
+  if (state.mode === 'focus') {
+    const { onScreen, onCTA } = focusHit(e.clientX, e.clientY);
+    if (onCTA) openFromTeaser();
+    else if (!onScreen) leaveScreen();
+    return;
+  }
   if (state.mode !== 'home') return;
   const key = pick(e.clientX, e.clientY);
-  if (key) enterScreen(key);
+  if (!key) return;
+  if (phone) {
+    // téléphone : 1er toucher = afficher sa carte ; toucher l'écran déjà affiché = l'ouvrir
+    if (key === state.phoneSel) openPhone(key);
+    else scrollToCard(key);
+    return;
+  }
+  enterScreen(key);
 });
 
 /* ---------- Redimensionnement ---------- */
@@ -264,10 +462,12 @@ window.addEventListener('resize', () => {
   renderer.setSize(w, h);
   composer.setSize(w, h);
   cssRenderer.setSize(w, h);
-  home = homePose();
-  if (state.mode === 'inside') {
-    const p = poseForScreen(monitorsByKey[state.active], state.inScreen ? FILL : 0.92);
-    if (state.inScreen) sizeScreenUI(state.active);
+  phone = isPhone();
+  document.body.classList.toggle('phone', phone);
+  home = restPose();
+  if (state.mode === 'inside' || state.mode === 'focus') {
+    const p = poseForScreen(monitorsByKey[state.active], FILL);
+    if (state.mode === 'inside' && state.inScreen) sizeScreenUI(state.active);
     camPos.copy(p.pos);
     camTarget.copy(p.target);
   }
@@ -288,6 +488,10 @@ function frame() {
     const e = ease(k);
     camPos.lerpVectors(tw.fromPos, tw.toPos, e);
     camTarget.lerpVectors(tw.fromTarget, tw.toTarget, e);
+    if (tw.midway && !tw.midway.done && k >= tw.midway.at) {
+      tw.midway.done = true;
+      tw.midway.fn();
+    }
     if (k >= 1) {
       state.tween = null;
       tw.done && tw.done();
@@ -296,8 +500,10 @@ function frame() {
     camera.lookAt(camTarget);
   } else if (state.mode === 'home') {
     // léger parallaxe à la souris
+    if (phone) state.parallax.set(Math.sin(t * 0.35) * 0.35, Math.sin(t * 0.27) * 0.25);
     smoothParallax.lerp(state.parallax, 0.05);
-    camPos.copy(home.pos).add(new THREE.Vector3(smoothParallax.x * 0.22, -smoothParallax.y * 0.1, 0));
+    const amp = phone ? 0.25 : 1;
+    camPos.copy(home.pos).add(new THREE.Vector3(smoothParallax.x * 0.22 * amp, -smoothParallax.y * 0.1 * amp, 0));
     camTarget.copy(home.target).add(new THREE.Vector3(smoothParallax.x * 0.06, -smoothParallax.y * 0.03, 0));
     camera.position.lerp(camPos, 0.08);
     camera.lookAt(camTarget);
@@ -314,6 +520,12 @@ function frame() {
 // Outil de mise au point : ?debug expose la caméra dans la console
 if (new URLSearchParams(location.search).has('debug')) window.__dbg = { camera, camPos, camTarget, state };
 
+selectPhone('profil', false);
+// place la carte « Profil » au centre dès le départ, sans animation
+{
+  const el = cardEls.find((c) => c.dataset.screen === 'profil');
+  cards.scrollLeft = el.offsetLeft - (cards.clientWidth - el.clientWidth) / 2;
+}
 setLoad(100, 'ready');
 requestAnimationFrame(frame);
 setTimeout(() => {

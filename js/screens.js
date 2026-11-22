@@ -51,13 +51,13 @@ function scanlines(ctx, alpha = 0.06) {
 }
 
 /* Bouton « avant-goût » commun : invite à cliquer pour entrer dans l'écran */
-function teaserCTA(ctx, t, label, color, y = 610) {
+function teaserCTA(ctx, t, label, color, y = 610, hover = false) {
   const pulse = 0.5 + 0.5 * Math.sin(t * 2.6);
   ctx.font = '600 24px "JetBrains Mono"';
   const w = ctx.measureText(label).width + 70;
   const x = (W - w) / 2;
   ctx.save();
-  ctx.globalAlpha = 0.25 + pulse * 0.25;
+  ctx.globalAlpha = hover ? 0.75 : 0.25 + pulse * 0.25;
   ctx.fillStyle = color;
   roundRect(ctx, x, y - 38, w, 58, 29);
   ctx.fill();
@@ -70,6 +70,7 @@ function teaserCTA(ctx, t, label, color, y = 610) {
   ctx.textAlign = 'center';
   ctx.fillText(label, W / 2, y);
   ctx.textAlign = 'left';
+  return { x, y: y - 38, w, h: 58 };
 }
 
 // Lignes floues « contenu à découvrir »
@@ -136,19 +137,25 @@ function parcoursScreen() {
       ctx.fillText(b, x + 24, 398);
     });
     ghostLines(ctx, x0, 462, [640, 520, 580], '#38bdf8');
-    teaserCTA(ctx, t, '▶  Cliquer pour voir le parcours', '#38bdf8');
+    api.cta = teaserCTA(ctx, t, '▶  Cliquer pour voir le parcours', '#38bdf8', 610, api.hover);
     scanlines(ctx, 0.05);
     texture.needsUpdate = true;
   }
 
   let last = -1;
-  return {
+  const api = {
     texture,
+    hover: false,
+    cta: null, // zone du bouton « Cliquer pour… » en pixels du canvas
+    setHover(v) {
+      if (v !== api.hover) { api.hover = v; last = -1; }
+    },
     update(t) {
       const k = Math.floor(t * 8);
       if (k !== last) { last = k; draw(t); }
     },
   };
+  return api;
 }
 
 /* ---------------- Écran central : terminal (avant-goût) ---------------- */
@@ -211,19 +218,25 @@ function profilScreen() {
       ctx.fillStyle = '#4ade80';
       ctx.fillRect(cursorX + 6, cursorY - 26, 15, 32);
     }
-    teaserCTA(ctx, t, '▶  Cliquer pour ouvrir le profil', '#4ade80');
+    api.cta = teaserCTA(ctx, t, '▶  Cliquer pour ouvrir le profil', '#4ade80', 610, api.hover);
     scanlines(ctx, 0.07);
     texture.needsUpdate = true;
   }
 
   let last = -1;
-  return {
+  const api = {
     texture,
+    hover: false,
+    cta: null, // zone du bouton « Cliquer pour… » en pixels du canvas
+    setHover(v) {
+      if (v !== api.hover) { api.hover = v; last = -1; }
+    },
     update(t) {
       const k = Math.floor(t * 20);
       if (k !== last) { last = k; draw(t); }
     },
   };
+  return api;
 }
 
 /* ---------------- Écran droit : CreaVizione ---------------- */
@@ -266,20 +279,26 @@ function creavizioneScreen() {
     ctx.fillText('Agence digitale · Le Havre · depuis avril 2026', W / 2, 390);
     ctx.fillText('Sites internet & applications web sur mesure', W / 2, 432);
 
-    teaserCTA(ctx, t, "▶  Cliquer pour découvrir l'entreprise", '#c4365a', 560);
+    api.cta = teaserCTA(ctx, t, "▶  Cliquer pour découvrir l'entreprise", '#c4365a', 560, api.hover);
     ctx.textAlign = 'left';
     scanlines(ctx, 0.04);
     texture.needsUpdate = true;
   }
 
   let last = -1;
-  return {
+  const api = {
     texture,
+    hover: false,
+    cta: null, // zone du bouton « Cliquer pour… » en pixels du canvas
+    setHover(v) {
+      if (v !== api.hover) { api.hover = v; last = -1; }
+    },
     update(t) {
       const k = Math.floor(t * 8);
       if (k !== last) { last = k; draw(t); }
     },
   };
+  return api;
 }
 
 /* ---------------- Néon mural « CreaVizione » ---------------- */
@@ -381,3 +400,4 @@ export function createScreens() {
 }
 
 export const SCREEN_ASPECT = W / H;
+export const SCREEN_PX = { W, H };

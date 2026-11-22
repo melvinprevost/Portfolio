@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Josefin+Sans:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=3" />
+  <link rel="stylesheet" href="css/style.css?v=6" />
   <script type="importmap">
     {
       "imports": {
@@ -35,13 +35,40 @@
   <header class="hud-top">
     <div class="brand">
       <span class="brand-name">Melvin Prévost</span>
-      <span class="brand-role">Systèmes &amp; réseaux · CRAM — Fondateur de CreaVizione</span>
+      <span class="brand-role brand-role-long">Systèmes &amp; réseaux · CRAM — Fondateur de CreaVizione</span>
+      <span class="brand-role brand-role-short">Systèmes &amp; réseaux · CRAM · CreaVizione</span>
     </div>
     <a class="hud-link" href="https://www.linkedin.com/in/melvinprevost/" target="_blank" rel="noopener">LinkedIn ↗</a>
   </header>
 
   <p id="hint" class="hint">Cliquez sur un écran pour y entrer</p>
+  <p class="back-hint">Échap ou clic à côté de l'écran pour revenir au bureau</p>
   <div id="tooltip" class="tooltip"></div>
+
+  <!-- Version téléphone : cartes à faire défiler, une par écran -->
+  <div class="phone-dock" aria-label="Écrans">
+    <div class="cards" id="cards">
+      <article class="card" data-screen="parcours" style="--accent:#38bdf8">
+        <p class="card-kicker">// Parcours</p>
+        <h2>3 ans d'alternance, puis un CDI.</h2>
+        <p class="card-text">CRAM · CreaVizione · MSc Bac +5</p>
+        <button class="card-open" data-open="parcours">Ouvrir le parcours</button>
+      </article>
+      <article class="card" data-screen="profil" style="--accent:#4ade80">
+        <p class="card-kicker">$ whoami</p>
+        <h2>Melvin Prévost</h2>
+        <p class="card-text">Chargé de projets &amp; admin systèmes et réseaux</p>
+        <button class="card-open" data-open="profil">Ouvrir le profil</button>
+      </article>
+      <article class="card card-cv" data-screen="creavizione" style="--accent:#c4365a">
+        <p class="card-kicker">Mon activité freelance</p>
+        <h2>Crea<span>Vizione</span></h2>
+        <p class="card-text">Agence digitale · Le Havre · depuis avril 2026</p>
+        <button class="card-open" data-open="creavizione">Découvrir l'entreprise</button>
+      </article>
+    </div>
+    <div class="card-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+  </div>
 
   <nav class="hud-nav" aria-label="Écrans">
     <button data-screen="parcours"><span class="dot dot-cyan"></span>Parcours</button>
@@ -55,9 +82,8 @@
   <section class="panel panel-parcours" id="panel-parcours" aria-hidden="true">
     <div class="window">
       <div class="titlebar">
-        <span class="lights"><i></i><i></i><i></i></span>
+        <span class="lights"><button class="light-close" data-close aria-label="Fermer et revenir au bureau" title="Fermer"></button><i></i><i></i></span>
         <span class="title">~/parcours</span>
-        <button class="close" data-close>← Retour au bureau</button>
       </div>
       <div class="window-body">
         <h1>Parcours</h1>
@@ -104,7 +130,7 @@
         </ol>
 
         <h2>Formations</h2>
-        <div class="cards">
+        <div class="edu-grid">
           <article>
             <span class="when">2024 — 2026 · Bac +5</span>
             <span class="badge">✓ Diplôme obtenu</span>
@@ -135,9 +161,8 @@
   <section class="panel panel-profil" id="panel-profil" aria-hidden="true">
     <div class="window">
       <div class="titlebar">
-        <span class="lights"><i></i><i></i><i></i></span>
+        <span class="lights"><button class="light-close" data-close aria-label="Fermer et revenir au bureau" title="Fermer"></button><i></i><i></i></span>
         <span class="title">melvin@bureau: ~</span>
-        <button class="close" data-close>← Retour au bureau</button>
       </div>
       <div class="window-body terminal">
         <p class="cmd"><span class="ps">melvin@bureau:~$</span> whoami</p>
@@ -182,9 +207,8 @@
   <section class="panel panel-creavizione" id="panel-creavizione" aria-hidden="true">
     <div class="window">
       <div class="titlebar">
-        <span class="lights"><i></i><i></i><i></i></span>
+        <span class="lights"><button class="light-close" data-close aria-label="Fermer et revenir au bureau" title="Fermer"></button><i></i><i></i></span>
         <span class="title">CreaVizione</span>
-        <button class="close" data-close>← Retour au bureau</button>
       </div>
       <div class="window-body cv-body">
         <div class="cv-intro">
@@ -209,6 +233,6 @@
     </div>
   </section>
 
-  <script type="module" src="js/main.js?v=3"></script>
+  <script type="module" src="js/main.js?v=6"></script>
 </body>
 </html>
