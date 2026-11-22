@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Melvin Prévost — Portfolio</title>
+  <meta name="description" content="Portfolio 3D de Melvin Prévost : chargé de projets et d'administration systèmes et réseaux chez CRAM, fondateur de CreaVizione." />
+  <meta property="og:title" content="Melvin Prévost — Portfolio" />
+  <meta property="og:description" content="Entrez dans mon bureau : parcours, compétences et CreaVizione." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Josefin+Sans:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- Écran de chargement -->
+  <div id="loader">
+    <div class="loader-inner">
+      <p class="loader-prompt">melvin@bureau:~$ <span id="loader-text">boot</span><span class="caret">_</span></p>
+      <div class="loader-bar"><div id="loader-progress"></div></div>
+    </div>
+  </div>
+
+  <canvas id="scene" aria-label="Bureau 3D de Melvin Prévost, de nuit, avec trois écrans"></canvas>
+
+  <!-- HUD -->
+  <header class="hud-top">
+    <div class="brand">
+      <span class="brand-name">Melvin Prévost</span>
+      <span class="brand-role">Systèmes &amp; réseaux · CRAM — Fondateur de CreaVizione</span>
+    </div>
+    <a class="hud-link" href="https://www.linkedin.com/in/melvinprevost/" target="_blank" rel="noopener">LinkedIn ↗</a>
+  </header>
+
+  <p id="hint" class="hint">Cliquez sur un écran pour y entrer</p>
+  <div id="tooltip" class="tooltip"></div>
+
+  <nav class="hud-nav" aria-label="Écrans">
+    <button data-screen="parcours"><span class="dot dot-cyan"></span>Parcours</button>
+    <button data-screen="profil"><span class="dot dot-green"></span>Profil</button>
+    <button data-screen="creavizione"><span class="dot dot-red"></span>CreaVizione</button>
+  </nav>
+
+  <!-- ============ PANNEAUX (contenu « dans » les écrans) ============ -->
+
+  <!-- Écran gauche : Parcours -->
+  <section class="panel panel-parcours" id="panel-parcours" aria-hidden="true">
+    <div class="window">
+      <div class="titlebar">
+        <span class="lights"><i></i><i></i><i></i></span>
+        <span class="title">~/parcours</span>
+        <button class="close" data-close>← Retour au bureau</button>
+      </div>
+      <div class="window-body">
+        <h1>Parcours</h1>
+        <p class="lead">Trois ans d'alternance chez CRAM, une embauche en CDI à la clé, et une agence web lancée en parallèle.</p>
+
+        <h2>Expériences</h2>
+        <ol class="timeline">
+          <li class="now">
+            <span class="when">Oct. 2026 — aujourd'hui · CDI</span>
+            <h3>Chargé de projets et d'administration systèmes et réseaux</h3>
+            <p class="where">CRAM · Le Havre · Hybride</p>
+            <p>Embauché en CDI à l'issue de mon alternance, sur le même poste.</p>
+            <ul>
+              <li>Configuration et maintenance des équipements réseau</li>
+              <li>Installation, configuration et gestion des serveurs Windows &amp; Linux</li>
+              <li>Gestion des sauvegardes et supervision du SI</li>
+              <li>Support N2 et gestion de projets</li>
+            </ul>
+          </li>
+          <li class="now">
+            <span class="when">Avr. 2026 — aujourd'hui · Indépendant</span>
+            <h3>Fondateur</h3>
+            <p class="where">CreaVizione · Le Havre · À distance</p>
+            <p>Agence digitale : sites vitrines, applications web sur mesure, refonte, SEO &amp; GEO.</p>
+          </li>
+          <li>
+            <span class="when">Sept. 2023 — Oct. 2026 · Alternance</span>
+            <h3>Alternant — Chargé de projets et d'administration systèmes et réseaux</h3>
+            <p class="where">CRAM · Le Havre</p>
+            <p>Trois ans sur l'infrastructure, le support N2 et les projets du SI.</p>
+          </li>
+          <li>
+            <span class="when">Janv. — Févr. 2023 · Stage</span>
+            <h3>Développeur PHP / MySQL &amp; support technique</h3>
+            <p class="where">Agence DBCOM · Le Havre</p>
+            <p>Développement PHP sous Joomla!, bases MySQL, support technique aux clients de l'agence.</p>
+          </li>
+          <li>
+            <span class="when">Mai — Juin 2022 · Stage</span>
+            <h3>Développeur web</h3>
+            <p class="where">River's Pub · Rouen</p>
+            <p>Création du site internet du restaurant en HTML, CSS et JavaScript.</p>
+          </li>
+        </ol>
+
+        <h2>Formations</h2>
+        <div class="cards">
+          <article>
+            <span class="when">2024 — 2026 · Bac +5</span>
+            <span class="badge">✓ Diplôme obtenu</span>
+            <h3>MSc Expert en informatique et SI</h3>
+            <p class="where">EPSI Rennes</p>
+            <p>Concevoir et sécuriser des solutions d'infrastructures virtualisées et cloud.</p>
+          </article>
+          <article>
+            <span class="when">2023 — 2024 · Bac +3</span>
+            <span class="badge">✓ Diplôme obtenu</span>
+            <h3>Bachelor IT</h3>
+            <p class="where">EPSI Rennes</p>
+            <p>Parcours SysOps.</p>
+          </article>
+          <article>
+            <span class="when">2021 — 2023 · Bac +2</span>
+            <span class="badge">✓ Diplôme obtenu</span>
+            <h3>BTS SIO</h3>
+            <p class="where">StJoSup · Le Havre</p>
+            <p>Option SLAM : solutions logicielles et applications métiers.</p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Écran central : Profil -->
+  <section class="panel panel-profil" id="panel-profil" aria-hidden="true">
+    <div class="window">
+      <div class="titlebar">
+        <span class="lights"><i></i><i></i><i></i></span>
+        <span class="title">melvin@bureau: ~</span>
+        <button class="close" data-close>← Retour au bureau</button>
+      </div>
+      <div class="window-body terminal">
+        <p class="cmd"><span class="ps">melvin@bureau:~$</span> whoami</p>
+        <h1>Melvin Prévost</h1>
+        <p class="lead">Chargé de projets et d'administration systèmes et réseaux chez <strong>CRAM</strong> (CDI), fondateur de <strong>CreaVizione</strong>. Basé au Havre.</p>
+        <p class="muted">Un état d'esprit cultivé par le sport, les nouvelles technologies et l'apprentissage personnel.</p>
+
+        <p class="cmd"><span class="ps">melvin@bureau:~$</span> ls ./competences</p>
+        <div class="skills">
+          <div class="skill"><h3>Réseaux &amp; sécurité</h3><p>Cisco · HP · Aruba · Fortinet · pfSense · Ruckus Wi-Fi</p></div>
+          <div class="skill"><h3>Systèmes</h3><p>Active Directory · DNS · DHCP · GPO · RDS</p></div>
+          <div class="skill"><h3>OS</h3><p>Windows · Windows Server · Linux</p></div>
+          <div class="skill"><h3>Virtualisation</h3><p>Hyper-V · VMware · Docker</p></div>
+          <div class="skill"><h3>Supervision &amp; EDR</h3><p>Zabbix · ManageEngine · SentinelOne · Cybereason</p></div>
+          <div class="skill"><h3>Sauvegarde</h3><p>Veeam · cBackup</p></div>
+          <div class="skill"><h3>Gestion</h3><p>GLPI · Vade</p></div>
+          <div class="skill"><h3>Langages</h3><p>PowerShell · Python · C# · VB · PHP · JavaScript · SQL · HTML/CSS</p></div>
+        </div>
+
+        <p class="cmd"><span class="ps">melvin@bureau:~$</span> cat langues.txt soft-skills.txt</p>
+        <div class="two-cols">
+          <ul class="plain">
+            <li>Français — langue maternelle</li>
+            <li>Anglais — professionnel</li>
+          </ul>
+          <ul class="tags">
+            <li>Curieux</li><li>Autonome</li><li>Adaptable</li><li>Apprend vite</li>
+          </ul>
+        </div>
+
+        <p class="cmd"><span class="ps">melvin@bureau:~$</span> ./contact.sh</p>
+        <div class="contact">
+          <a class="btn" href="https://www.linkedin.com/in/melvinprevost/" target="_blank" rel="noopener">LinkedIn</a>
+          <a class="btn ghost" href="mailto:melvinlh76@gmail.com">melvinlh76@gmail.com</a>
+        </div>
+        <p class="cmd"><span class="ps">melvin@bureau:~$</span> <span class="caret">_</span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Écran droit : CreaVizione -->
+  <section class="panel panel-creavizione" id="panel-creavizione" aria-hidden="true">
+    <div class="window">
+      <div class="titlebar">
+        <span class="lights"><i></i><i></i><i></i></span>
+        <span class="title">CreaVizione</span>
+        <button class="close" data-close>← Retour au bureau</button>
+      </div>
+      <div class="window-body cv-body">
+        <div class="cv-intro">
+          <p class="cv-kicker">Mon activité freelance</p>
+          <h1 class="cv-logo">Crea<span>Vizione</span></h1>
+          <p class="lead">En parallèle de mon poste chez CRAM, j'ai fondé CreaVizione en avril 2026 : une agence digitale basée au Havre qui conçoit des sites internet et des applications web sur mesure pour les entreprises, commerçants et artisans.</p>
+          <p>Je suis l'interlocuteur unique de chaque projet, du premier échange à la mise en ligne, en local en Normandie comme à distance partout en France.</p>
+
+          <ul class="cv-facts">
+            <li><strong>Fondée</strong><span>Avril 2026</span></li>
+            <li><strong>Basée</strong><span>Le Havre, Normandie</span></li>
+            <li><strong>Domaine</strong><span>Sites web &amp; applications sur mesure</span></li>
+          </ul>
+
+          <div class="contact">
+            <a class="btn cv-btn" href="https://creavizione.com/" target="_blank" rel="noopener">Découvrir creavizione.com ↗</a>
+            <a class="btn ghost" href="https://www.linkedin.com/company/creavizione/" target="_blank" rel="noopener">Page LinkedIn ↗</a>
+          </div>
+          <p class="cv-mail">Un projet ? <a href="mailto:contact@creavizione.com">contact@creavizione.com</a></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
