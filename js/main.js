@@ -5,8 +5,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createScreens, SCREEN_PX } from './screens.js?v=34';
-import { buildScene } from './scene.js?v=34';
+import { createScreens, SCREEN_PX } from './screens.js?v=35';
+import { buildScene } from './scene.js?v=35';
 
 const $ = (s) => document.querySelector(s);
 const loaderText = $('#loader-text');
@@ -621,6 +621,24 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') leaveScreen();
 });
 window.addEventListener('popstate', () => leaveScreen(true));
+
+// Molette et trackpad sur une fenêtre affichée dans le moniteur : on fait défiler le contenu
+// nous-mêmes. Safari n'envoie pas le défilement natif aux zones défilantes placées dans la
+// scène CSS 3D (Chrome, si) ; en le gérant ici, le comportement est le même partout.
+window.addEventListener(
+  'wheel',
+  (e) => {
+    if (state.mode !== 'inside' || !state.inScreen || !state.active) return;
+    const r = screenUI[state.active].wrapper.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+    const body = windows[state.active].querySelector('.window-body');
+    e.preventDefault();
+    const unit = e.deltaMode === 1 ? 32 : e.deltaMode === 2 ? body.clientHeight : 1;
+    body.scrollTop += e.deltaY * unit;
+    body.scrollLeft += e.deltaX * unit;
+  },
+  { passive: false }
+);
 
 // Sur écran tactile : « Touchez » plutôt que « Cliquez / Échap »
 if (window.matchMedia('(hover: none)').matches) {
