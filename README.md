@@ -12,6 +12,10 @@ Bureau de nuit en 3D (Three.js) : Melvin de dos devant trois écrans. Depuis le 
 
 Modèle « Leonard » et animation « Typing » issus de [Mixamo](https://www.mixamo.com) (Adobe), convertis en GLB allégé (`assets/leonard-typing.glb`, ~3,3 Mo). Le personnage procédural de `js/scene.js` ne sert plus que de secours si le modèle ne se charge pas.
 
+## Lampe de bureau
+
+Modèle « [Desk Lamp Arm 01](https://polyhaven.com/a/desk_lamp_arm_01) » de Poly Haven (modélisation : Kuutti Siitonen), sous licence CC0, regroupé en un seul GLB (`assets/desk-lamp.glb`, ~2,9 Mo, textures 1k). La lampe procédurale sert de secours si le modèle ne se charge pas.
+
 ## Lancer en local
 
 ```bash

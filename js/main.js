@@ -5,8 +5,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createScreens, SCREEN_PX } from './screens.js?v=25';
-import { buildScene } from './scene.js?v=25';
+import { createScreens, SCREEN_PX } from './screens.js?v=31';
+import { buildScene } from './scene.js?v=31';
 
 const $ = (s) => document.querySelector(s);
 const loaderText = $('#loader-text');
@@ -366,6 +366,12 @@ function fitCharacter(model) {
   world.chair.position.y = THREE.MathUtils.clamp(hipAfter.y - 0.09 - seatTop, -0.12, 0.12);
   world.chair.position.z = 0.3 + THREE.MathUtils.clamp(hipAfter.z - 0.3, -0.15, 0.15);
 }
+// Lampe de bureau : modèle Poly Haven (CC0), chargé sans bloquer l'affichage ; la lampe
+// procédurale reste en place s'il ne se charge pas.
+new GLTFLoader()
+  .loadAsync('assets/desk-lamp.glb?v=1')
+  .then((g) => world.useLampModel(g.scene))
+  .catch((err) => console.warn('Lampe 3D indisponible, lampe de secours utilisée', err));
 setLoad(70, 'allumage des écrans');
 
 /* ---------- Post-traitement (bloom) ---------- */

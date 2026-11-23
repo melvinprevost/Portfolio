@@ -1,8 +1,9 @@
 // Construction du bureau de nuit : pièce, bureau, 3 écrans, chaise, personnage de dos, décor.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { neonTexture, cityTexture } from './screens.js?v=25';
+import { neonTexture, cityTexture } from './screens.js?v=31';
 
+const DESK_TOP = 0.76; // dessus du plateau du bureau
 const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.05, ...opts });
 
 function box(w, h, d, material, r = 0) {
@@ -404,16 +405,29 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
   scene.add(lampLight, lampLight.target);
 
   /* ---------- Tasse + vapeur ---------- */
-  const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.034, 0.095, 24), mat('#8f8a84', { roughness: 0.4 }));
-  mug.position.set(-0.44, 0.81, -0.31);
+  // mug creux : profil tourné (paroi de 3 mm, rebord arrondi, intérieur), café sombre et mat
+  // posé dedans, sous le bord, pour ne pas renvoyer la lampe en plein dans le bloom
+  const mugProfile = [
+    [0.0, 0.0], [0.031, 0.0], [0.034, 0.003], [0.037, 0.06], [0.038, 0.093],
+    [0.0375, 0.095], [0.036, 0.0955], [0.0348, 0.094], [0.0342, 0.06], [0.0315, 0.009], [0.0, 0.008],
+  ].map(([x, y]) => new THREE.Vector2(x, y));
+  const mugMat = mat('#7a756f', { roughness: 0.45 });
+  const mug = new THREE.Mesh(new THREE.LatheGeometry(mugProfile, 40), mugMat);
+  mug.position.set(-0.44, 0.7625, -0.31);
   mug.castShadow = true;
+  mug.receiveShadow = true;
   scene.add(mug);
-  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.007, 8, 16), mug.material);
-  handle.position.set(-0.40, 0.815, -0.31);
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.0065, 10, 20, Math.PI * 1.15), mugMat);
+  handle.rotation.z = -Math.PI * 0.575;
+  handle.position.set(-0.4045, 0.81, -0.31);
+  handle.castShadow = true;
   scene.add(handle);
-  const coffee = new THREE.Mesh(new THREE.CircleGeometry(0.034, 20), mat('#2b170c', { roughness: 0.2 }));
+  const coffee = new THREE.Mesh(
+    new THREE.CircleGeometry(0.0342, 32),
+    new THREE.MeshPhysicalMaterial({ color: '#2a1308', roughness: 0.85, specularIntensity: 0.04 })
+  );
   coffee.rotation.x = -Math.PI / 2;
-  coffee.position.set(-0.44, 0.85, -0.31);
+  coffee.position.set(-0.44, 0.7625 + 0.078, -0.31);
   scene.add(coffee);
   const steamMat = new THREE.MeshBasicMaterial({ color: '#9aa3b5', transparent: true, opacity: 0.0, depthWrite: false });
   const steam = [];
@@ -991,6 +1005,39 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
     // Recale le clavier (centre des touches) et la souris sous les mains mesurées
     placeKeyboard(x, z) {
       kbGroup.position.set(x, 0, z);
+    },
+    // Remplace la lampe procédurale par un modèle importé (Poly Haven « Desk Lamp Arm 01 », CC0) :
+    // mise à l'échelle, posée sur le bureau, tête tournée vers le plan de travail, et spot
+    // recalé sous l'ampoule.
+    useLampModel(model, { scale = 0.62, x = -1.08, z = -0.8 } = {}) {
+      lamp.visible = false;
+      model.scale.setScalar(scale);
+      // pince au bord gauche du bureau, à côté de l'écran Parcours ; la tête (vers -z dans le
+      // modèle) avance vers l'avant du bureau, au-dessus du plan de travail
+      model.rotation.y = Math.PI;
+      model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(model);
+      model.position.x += x - (box.min.x + box.max.x) / 2;
+      model.position.z += z - box.min.z;
+      model.position.y += DESK_TOP - box.min.y;
+      let bulbMesh = null;
+      model.traverse((o) => {
+        if (!o.isMesh) return;
+        o.castShadow = true;
+        o.receiveShadow = true;
+        if (/light/i.test(o.material.name)) {
+          bulbMesh = o;
+          o.castShadow = false; // l'ampoule ne doit pas masquer son propre spot
+          o.material.emissiveIntensity = 1.4;
+        }
+      });
+      scene.add(model);
+      model.updateMatrixWorld(true);
+      if (bulbMesh) {
+        const c = new THREE.Box3().setFromObject(bulbMesh).getCenter(new THREE.Vector3());
+        lampLight.position.copy(c).add(new THREE.Vector3(0, -0.025, 0));
+      }
+      this.lampModel = model;
     },
     // forme de la souris (longueur, largeur, profil de hauteur arrière → avant), en mètres
     shapeMouse(shape) {
