@@ -1,7 +1,7 @@
 // Construction du bureau de nuit : pièce, bureau, 3 écrans, chaise, personnage de dos, décor.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { neonTexture, cityTexture } from './screens.js?v=31';
+import { neonTexture, cityTexture } from './screens.js?v=33';
 
 const DESK_TOP = 0.76; // dessus du plateau du bureau
 const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.05, ...opts });
@@ -400,7 +400,7 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
   lampLight.position.set(-1.0, 1.17, -0.52);
   lampLight.target.position.set(-0.7, 0.76, -0.4);
   lampLight.castShadow = true;
-  lampLight.shadow.mapSize.setScalar(lowPower ? 512 : 1024);
+  lampLight.shadow.mapSize.setScalar(lowPower ? 256 : 512);
   lampLight.shadow.bias = -0.0008;
   scene.add(lampLight, lampLight.target);
 
@@ -978,11 +978,12 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
   moon.position.set(-4, 3.2, 0.6);
   moon.target.position.set(0.3, 0.6, 0.1);
   moon.castShadow = true;
-  moon.shadow.mapSize.setScalar(lowPower ? 1024 : 2048);
-  moon.shadow.camera.left = -2.5;
-  moon.shadow.camera.right = 2.5;
-  moon.shadow.camera.top = 2.5;
-  moon.shadow.camera.bottom = -2.5;
+  moon.shadow.mapSize.setScalar(lowPower ? 512 : 1024);
+  // cadrée sur le bureau et la chaise : carte d'ombre plus petite pour la même netteté
+  moon.shadow.camera.left = -1.8;
+  moon.shadow.camera.right = 1.8;
+  moon.shadow.camera.top = 1.8;
+  moon.shadow.camera.bottom = -1.8;
   moon.shadow.bias = -0.0006;
   moon.shadow.normalBias = 0.02;
   scene.add(moon, moon.target);

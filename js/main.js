@@ -5,8 +5,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createScreens, SCREEN_PX } from './screens.js?v=31';
-import { buildScene } from './scene.js?v=31';
+import { createScreens, SCREEN_PX } from './screens.js?v=33';
+import { buildScene } from './scene.js?v=33';
 
 const $ = (s) => document.querySelector(s);
 const loaderText = $('#loader-text');
@@ -15,6 +15,13 @@ const setLoad = (pct, txt) => {
   loaderProgress.style.width = pct + '%';
   if (txt) loaderText.textContent = txt;
 };
+
+/* ---------- Modèles 3D : téléchargés dès le départ, en parallèle des polices ---------- */
+const gltfLoader = new GLTFLoader();
+const characterReq = gltfLoader.loadAsync('assets/leonard-typing.glb?v=2');
+const lampReq = gltfLoader.loadAsync('assets/desk-lamp.glb?v=2');
+characterReq.catch(() => {}); // erreurs traitées plus bas
+lampReq.catch(() => {});
 
 /* ---------- Polices (nécessaires avant de dessiner les écrans) ---------- */
 setLoad(10, 'chargement des polices');
@@ -44,13 +51,20 @@ const lowPower = phone;
 /* ---------- Renderer ---------- */
 setLoad(35, 'montage du bureau');
 const canvas = $('#scene');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, lowPower ? 1.5 : 2));
+// Pas d'antialiasing natif : le rendu passe par le post-traitement, qui l'ignorerait (voir le
+// composer). Pas de GPU « haute performance » forcé : le navigateur choisit le plus sobre.
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+// Résolution plafonnée à 1,5× (au-delà, le gain est invisible sous le bloom et coûte cher) ;
+// abaissée automatiquement si l'appareil ne suit pas (voir la boucle).
+const MAX_PR = 1.5;
+let pixelRatio = Math.min(window.devicePixelRatio, MAX_PR);
+renderer.setPixelRatio(pixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.3;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = false; // ombres recalculées une image sur deux (voir la boucle)
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#04050b');
@@ -89,7 +103,7 @@ const _lq = new THREE.Quaternion();
 const _mq = new THREE.Quaternion();
 const _wq = new THREE.Quaternion();
 try {
-  const gltf = await new GLTFLoader().loadAsync('assets/leonard-typing.glb?v=1');
+  const gltf = await characterReq;
   const model = gltf.scene;
   model.traverse((o) => {
     if (o.isMesh) {
@@ -368,16 +382,26 @@ function fitCharacter(model) {
 }
 // Lampe de bureau : modèle Poly Haven (CC0), chargé sans bloquer l'affichage ; la lampe
 // procédurale reste en place s'il ne se charge pas.
-new GLTFLoader()
-  .loadAsync('assets/desk-lamp.glb?v=1')
+lampReq
   .then((g) => world.useLampModel(g.scene))
   .catch((err) => console.warn('Lampe 3D indisponible, lampe de secours utilisée', err));
 setLoad(70, 'allumage des écrans');
 
 /* ---------- Post-traitement (bloom) ---------- */
-const composer = new EffectComposer(renderer);
+// Écrans non Retina : antialiasing MSAA dans le rendu intermédiaire (inutile au-delà de 1,5×)
+const composer = new EffectComposer(
+  renderer,
+  new THREE.WebGLRenderTarget(window.innerWidth * pixelRatio, window.innerHeight * pixelRatio, {
+    type: THREE.HalfFloatType,
+    samples: pixelRatio < 1.5 ? 4 : 0,
+  })
+);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.55, 0.6, 0.82);
+// bloom calculé en demi-résolution : flou par nature, la différence ne se voit pas
+const bloomSetSize = bloom.setSize.bind(bloom);
+bloom.setSize = (w, h) => bloomSetSize(Math.max(1, Math.round(w / 2)), Math.max(1, Math.round(h / 2)));
+bloom.setSize(window.innerWidth * pixelRatio, window.innerHeight * pixelRatio);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -792,6 +816,7 @@ const clock = new THREE.Clock();
 const smoothParallax = new THREE.Vector2();
 
 let lastT = 0;
+let frameNo = 0;
 function frame() {
   const t = clock.getElapsedTime();
   const deltaT = Math.min(0.1, t - lastT);
@@ -803,6 +828,7 @@ function frame() {
     updateMouse(deltaT);
   }
   Object.values(screens).forEach((s) => s.update(t));
+  renderer.shadowMap.needsUpdate = frameNo++ % 2 === 0;
 
   if (state.tween) {
     const tw = state.tween;
@@ -835,12 +861,59 @@ function frame() {
   }
 
   composer.render();
-  cssRenderer.render(cssScene, camera);
-  requestAnimationFrame(frame);
+  // fenêtres HTML dans les moniteurs : seulement quand l'une d'elles peut être affichée
+  if (state.inScreen && state.mode !== 'home') cssRenderer.render(cssScene, camera);
+}
+
+/* ---------- Cadence : rendu à la demande ---------- */
+// 60 i/s quand quelque chose bouge (caméra, souris, tactile, défilement des cartes),
+// 30 i/s au repos, 20 si la fenêtre n'a pas le focus, 10 derrière le panneau téléphone.
+// Jamais plus de 60 (écrans 120 Hz), et rien quand l'onglet est caché (rAF s'arrête).
+let lastInput = -1e9;
+const poke = () => (lastInput = performance.now());
+['pointermove', 'pointerdown', 'wheel', 'touchstart', 'touchmove', 'keydown'].forEach((ev) =>
+  window.addEventListener(ev, poke, { passive: true })
+);
+cards.addEventListener('scroll', poke, { passive: true });
+let focused = document.hasFocus();
+window.addEventListener('focus', () => (focused = true));
+window.addEventListener('blur', () => (focused = false));
+function targetFps(now) {
+  if (state.tween) return 60;
+  if (phone && state.mode === 'inside') return 10;
+  if (now - lastInput < 2000) return 60;
+  return focused ? 30 : 20;
+}
+
+// Résolution adaptative : si, en visant 60 i/s, la moyenne reste nettement en dessous,
+// on baisse la résolution par paliers (jusqu'à 1×).
+let lastFrame = 0;
+let slowSum = 0;
+let slowN = 0;
+function adaptResolution(interval, fps) {
+  if (fps !== 60 || interval > 250 || document.hidden || !focused) return;
+  slowSum += interval;
+  if (++slowN < 45) return;
+  const avg = slowSum / slowN;
+  slowSum = slowN = 0;
+  if (avg > 1000 / 42 && pixelRatio > 1) {
+    pixelRatio = Math.max(1, pixelRatio - 0.25);
+    renderer.setPixelRatio(pixelRatio);
+    composer.setPixelRatio(pixelRatio);
+  }
+}
+function loop(now) {
+  requestAnimationFrame(loop);
+  const fps = targetFps(now);
+  const interval = now - lastFrame;
+  if (interval < 1000 / fps - 3) return;
+  lastFrame = now;
+  adaptResolution(interval, fps);
+  frame();
 }
 
 // Outil de mise au point : ?debug expose la caméra dans la console
-if (new URLSearchParams(location.search).has('debug')) window.__dbg = { camera, camPos, camTarget, state };
+if (new URLSearchParams(location.search).has('debug')) window.__dbg = { camera, camPos, camTarget, state, renderer, get pixelRatio() { return pixelRatio; }, get frames() { return frameNo; } };
 
 selectPhone('profil', false);
 // place la carte « Profil » au centre dès le départ, sans animation
@@ -849,7 +922,7 @@ selectPhone('profil', false);
   cards.scrollLeft = el.offsetLeft - (cards.clientWidth - el.clientWidth) / 2;
 }
 setLoad(100, 'ready');
-requestAnimationFrame(frame);
+requestAnimationFrame(loop);
 setTimeout(() => {
   $('#loader').classList.add('done');
   tweenCamera(home.pos.clone(), home.target.clone(), 2600, () => {

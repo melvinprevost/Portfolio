@@ -10,15 +10,24 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Josefin+Sans:wght@400;600;700&family=Space+Grotesk:wght@500;700&family=Tilt+Neon&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=31" />
+  <link rel="stylesheet" href="css/style.css?v=33" />
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
         "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
       }
     }
   </script>
+  <!-- modules téléchargés en parallèle dès l'analyse de la page -->
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js" crossorigin />
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js" crossorigin />
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/postprocessing/EffectComposer.js" crossorigin />
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/postprocessing/UnrealBloomPass.js" crossorigin />
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/renderers/CSS3DRenderer.js" crossorigin />
+  <link rel="modulepreload" href="js/main.js?v=33" />
+  <link rel="modulepreload" href="js/scene.js?v=33" />
+  <link rel="modulepreload" href="js/screens.js?v=33" />
 </head>
 <body>
   <!-- Écran de chargement -->
@@ -237,6 +246,6 @@
     </div>
   </section>
 
-  <script type="module" src="js/main.js?v=31"></script>
+  <script type="module" src="js/main.js?v=33"></script>
 </body>
 </html>

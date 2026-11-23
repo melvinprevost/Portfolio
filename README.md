@@ -16,6 +16,12 @@ Modèle « Leonard » et animation « Typing » issus de [Mixamo](https://www.mi
 
 Modèle « [Desk Lamp Arm 01](https://polyhaven.com/a/desk_lamp_arm_01) » de Poly Haven (modélisation : Kuutti Siitonen), sous licence CC0, regroupé en un seul GLB (`assets/desk-lamp.glb`, ~2,9 Mo, textures 1k). La lampe procédurale sert de secours si le modèle ne se charge pas.
 
+## Performances
+
+- Rendu à la demande : 60 i/s seulement quand quelque chose bouge (caméra, souris, tactile), 30 au repos, 20 sans le focus, 10 derrière le panneau téléphone ; jamais plus de 60 sur les écrans 120 Hz.
+- Résolution plafonnée à 1,5× et abaissée automatiquement si l'appareil ne suit pas ; bloom en demi-résolution ; ombres recalculées une image sur deux.
+- Modèles allégés : personnage quantifié (`KHR_mesh_quantization`, normales/poids/UV/rotations compressés), lampe en textures 512 px ; téléchargés en parallèle dès l'ouverture de la page.
+
 ## Lancer en local
 
 ```bash

@@ -232,7 +232,7 @@ function profilScreen() {
       if (v !== api.hover) { api.hover = v; last = -1; }
     },
     update(t) {
-      const k = Math.floor(t * 20);
+      const k = Math.floor(t * 12); // frappe du terminal : 12 i/s suffisent
       if (k !== last) { last = k; draw(t); }
     },
   };
