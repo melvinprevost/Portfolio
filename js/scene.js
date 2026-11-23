@@ -1,7 +1,7 @@
 // Construction du bureau de nuit : pièce, bureau, 3 écrans, chaise, personnage de dos, décor.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { neonTexture, cityTexture } from './screens.js?v=13';
+import { neonTexture, cityTexture } from './screens.js?v=25';
 
 const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.05, ...opts });
 
@@ -11,6 +11,74 @@ function box(w, h, d, material, r = 0) {
   m.castShadow = true;
   m.receiveShadow = true;
   return m;
+}
+
+// Souris ergonomique, origine au centre de sa base, avant vers -z. Le corps est une sphère
+// déformée : longueur, largeur et profil de hauteur (de l'arrière vers l'avant) réglables pour
+// épouser le dessous de la main du personnage. Deux boutons séparés par une rainure, molette,
+// liseré lumineux à la base.
+function buildMouse(group, { length = 0.12, width = 0.064, heights = [0.03, 0.037, 0.04, 0.036, 0.026] } = {}) {
+  group.children.slice().forEach((c) => {
+    group.remove(c);
+    c.geometry.dispose();
+  });
+  const n = heights.length - 1;
+  const H = (t) => {
+    const f = THREE.MathUtils.clamp(t, 0, 1) * n;
+    const i = Math.min(n - 1, Math.floor(f));
+    const k = f - i;
+    return heights[i] + (heights[i + 1] - heights[i]) * k * k * (3 - 2 * k);
+  };
+  const halfW = (t) => (width / 2) * (0.84 + 0.16 * Math.sin(Math.PI * Math.min(1, t * 1.15)));
+  const BASE = 0.003;
+  // dessus de la ligne médiane à l'abscisse t (0 = arrière, 1 = avant)
+  const topAt = (t) => {
+    const z = 1 - 2 * t;
+    return BASE + H(t) * Math.pow(Math.max(0, 1 - z * z), 0.22);
+  };
+
+  const geo = new THREE.SphereGeometry(1, 56, 36);
+  geo.rotateX(Math.PI / 2); // pôles sur l'axe z
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const y = p.getY(i);
+    const z = p.getZ(i);
+    const r = Math.sqrt(Math.max(0, 1 - z * z));
+    const t = (1 - z) / 2;
+    const e = Math.pow(r, 0.22); // extrémités arrondies mais franches
+    const sx = r > 1e-4 ? x / r : 0;
+    const sy = r > 1e-4 ? y / r : 0;
+    const X = sx * e * halfW(t) * (1.08 - 0.08 * (1 - Math.abs(sy)));
+    const Y = sy > 0 ? BASE + Math.pow(sy, 0.75) * e * H(t) : BASE * (1 + sy);
+    p.setXYZ(i, X, Y, (z * length) / 2);
+  }
+  geo.computeVertexNormals();
+  const body = new THREE.Mesh(geo, mat('#15171f', { roughness: 0.32, metalness: 0.15 }));
+  body.castShadow = true;
+  body.receiveShadow = true;
+  group.add(body);
+
+  // liseré lumineux : copie aplatie et légèrement élargie du corps, à la base
+  const rim = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#7c5cff', toneMapped: false }));
+  rim.scale.set(1.035, 0.09, 1.02);
+  group.add(rim);
+
+  // rainure entre les deux boutons, sur la moitié avant
+  const groove = [];
+  for (let t = 0.5; t <= 0.97; t += 0.035) groove.push(new THREE.Vector3(0, topAt(t) + 0.0004, (length / 2) * (1 - 2 * t)));
+  const grooveMesh = new THREE.Mesh(
+    new THREE.TubeGeometry(new THREE.CatmullRomCurve3(groove), 24, 0.0009, 6),
+    mat('#05060a', { roughness: 0.8 })
+  );
+  group.add(grooveMesh);
+
+  // molette
+  const tw = 0.7;
+  const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.0085, 0.0085, 0.0065, 20), mat('#2a2d38', { roughness: 0.6 }));
+  wheel.rotation.z = Math.PI / 2;
+  wheel.position.set(0, topAt(tw) - 0.003, (length / 2) * (1 - 2 * tw));
+  group.add(wheel);
 }
 
 // Cylindre de rayon r tendu entre deux points (membres du personnage).
@@ -157,22 +225,30 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
     scene.add(leg);
   });
 
+  // Clavier et tapis : un groupe centré sur le clavier, recalé sous les mains du personnage
+  // (placeKeyboard) une fois l'animation mesurée. Position par défaut : (-0.06, -0.44).
+  const kbGroup = new THREE.Group();
+  kbGroup.position.set(-0.06, 0, -0.44);
+  scene.add(kbGroup);
+  const KX = 0.06; // décalages locaux : coordonnées d'origine + (KX, KZ)
+  const KZ = 0.44;
+
   // Tapis de souris XXL
   const mat1 = box(1.0, 0.004, 0.36, mat('#0b0d14', { roughness: 0.9 }));
-  mat1.position.set(0.05, 0.762, -0.42);
-  scene.add(mat1);
+  mat1.position.set(0.05 + KX, 0.762, -0.42 + KZ);
+  kbGroup.add(mat1);
 
   // Clavier
   const kb = box(0.44, 0.022, 0.14, mat('#101219', { roughness: 0.4 }), 0.006);
-  kb.position.set(-0.06, 0.776, -0.44);
-  scene.add(kb);
+  kb.position.set(-0.06 + KX, 0.776, -0.44 + KZ);
+  kbGroup.add(kb);
   const keyGlow = new THREE.Mesh(
     new THREE.PlaneGeometry(0.42, 0.12),
     new THREE.MeshBasicMaterial({ color: '#6d5dfc', transparent: true, opacity: 0.55 })
   );
   keyGlow.rotation.x = -Math.PI / 2;
-  keyGlow.position.set(-0.06, 0.7878, -0.44);
-  scene.add(keyGlow);
+  keyGlow.position.set(-0.06 + KX, 0.7878, -0.44 + KZ);
+  kbGroup.add(keyGlow);
   updaters.push((t) => keyGlow.material.color.setHSL((0.7 + t * 0.03) % 1, 0.8, 0.55));
 
   // Touches : disposition type clavier (rangée de fonctions + 5 rangées, barre d'espace).
@@ -199,8 +275,8 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
   let ki = 0;
   layout.forEach((row, r) => {
     const total = row.units.reduce((a, b) => a + b, 0);
-    let x = -0.06 - (total * U) / 2;
-    const z = -0.495 + r * 0.0212 + (r === 0 ? 0.002 : 0.005);
+    let x = -0.06 + KX - (total * U) / 2;
+    const z = -0.495 + KZ + r * 0.0212 + (r === 0 ? 0.002 : 0.005);
     row.units.forEach((u, c) => {
       kP.set(x + (u * U) / 2, 0.7925, z);
       kS.set(u * U - 0.0045, 0.0075, (row.depth || 1) * 0.0172);
@@ -213,13 +289,12 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
   });
   keys.instanceMatrix.needsUpdate = true;
   keys.instanceColor.needsUpdate = true;
-  scene.add(keys);
+  kbGroup.add(keys);
 
   // Souris
-  const mouse = new THREE.Mesh(new THREE.SphereGeometry(0.035, 20, 14), mat('#101219', { roughness: 0.35 }));
-  mouse.scale.set(0.9, 0.45, 1.4);
-  mouse.position.set(0.36, 0.774, -0.42);
-  mouse.castShadow = true;
+  const mouse = new THREE.Group();
+  buildMouse(mouse);
+  mouse.position.set(0.36, 0.764, -0.42);
   scene.add(mouse);
 
   /* ---------- Écrans ---------- */
@@ -877,7 +952,7 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
     });
     // la souris suit la paume droite
     _a.set(0, -0.026, -0.05).applyQuaternion(handR.group.quaternion).add(handR.group.position);
-    mouse.position.set(_a.x, 0.774, _a.z);
+    mouse.position.set(_a.x, 0.764, _a.z);
     mouse.rotation.y = handR.group.rotation.y;
   });
 
@@ -912,6 +987,18 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
       characterModel = model;
       person.visible = false;
       this.occluders[0] = model;
+    },
+    // Recale le clavier (centre des touches) et la souris sous les mains mesurées
+    placeKeyboard(x, z) {
+      kbGroup.position.set(x, 0, z);
+    },
+    // forme de la souris (longueur, largeur, profil de hauteur arrière → avant), en mètres
+    shapeMouse(shape) {
+      buildMouse(mouse, shape);
+    },
+    placeMouse(x, z, rotY = 0) {
+      mouse.position.set(x, 0.764, z);
+      mouse.rotation.y = rotY;
     },
     update(t) {
       updaters.forEach((fn) => fn(t));

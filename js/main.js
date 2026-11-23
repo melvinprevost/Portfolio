@@ -5,8 +5,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createScreens, SCREEN_PX } from './screens.js?v=13';
-import { buildScene } from './scene.js?v=13';
+import { createScreens, SCREEN_PX } from './screens.js?v=25';
+import { buildScene } from './scene.js?v=25';
 
 const $ = (s) => document.querySelector(s);
 const loaderText = $('#loader-text');
@@ -65,6 +65,29 @@ const world = buildScene(scene, screens, { lowPower });
 // Chargé avant d'afficher la scène ; en cas d'échec, le personnage procédural reste en place.
 setLoad(50, 'installation du personnage');
 let mixer = null;
+let armFix = null; // correction de l'avant-bras droit (voir fitCharacter)
+let mouseTrack = null; // trajectoire de la souris (voir fitCharacter et updateMouse)
+const DESK_Y = 0.764; // dessus du tapis de souris
+// À chaque image : la souris suit la trajectoire précalculée sur l'animation (collée à la
+// paume droite quand la main est dessus, immobile quand elle tape), avec un léger lissage.
+function updateMouse(dt) {
+  const m = mouseTrack;
+  if (!m || !dt) return;
+  const f = ((mixer._actions[0].time % m.dur) / m.dur) * m.n;
+  const i0 = Math.floor(f) % m.n;
+  const i1 = (i0 + 1) % m.n;
+  const a = f - Math.floor(f);
+  const at = (k) => m.path[i0 * 3 + k] + (m.path[i1 * 3 + k] - m.path[i0 * 3 + k]) * a;
+  const k = 1 - Math.exp(-dt * 18);
+  m.x += (at(0) - m.x) * k;
+  m.z += (at(1) - m.z) * k;
+  m.rot += (at(2) - m.rot) * k;
+  world.placeMouse(m.x, m.z, m.rot);
+}
+const _pq = new THREE.Quaternion();
+const _lq = new THREE.Quaternion();
+const _mq = new THREE.Quaternion();
+const _wq = new THREE.Quaternion();
 try {
   const gltf = await new GLTFLoader().loadAsync('assets/leonard-typing.glb?v=1');
   const model = gltf.scene;
@@ -85,37 +108,258 @@ try {
   console.warn('Modèle 3D indisponible, personnage de secours utilisé', err);
 }
 
-// Cale le modèle : mains (en moyenne sur l'animation) au-dessus du clavier, bassin sur l'assise
-function fitCharacter(model) {
-  const find = (part) => {
-    let found = null;
-    model.traverse((o) => { if (!found && o.isBone && o.name.toLowerCase().endsWith(part)) found = o; });
-    return found;
-  };
-  const hips = find('hips');
-  const lHand = find('lefthand');
-  const rHand = find('righthand');
-  const hands = new THREE.Vector3();
-  const hip = new THREE.Vector3();
-  const tmp = new THREE.Vector3();
-  const N = 12;
-  const dur = mixer._actions[0].getClip().duration;
-  for (let i = 0; i < N; i++) {
-    mixer.setTime((i / N) * dur);
-    model.updateMatrixWorld(true);
-    hands.add(lHand.getWorldPosition(tmp)).add(rHand.getWorldPosition(tmp));
-    hip.add(hips.getWorldPosition(tmp));
+// Cale le modèle et le bureau sur l'animation : on mesure où tombent réellement les doigts
+// pendant la frappe, puis on place le bassin sur la chaise, la frappe sur le dessus des touches,
+// le clavier centré sous les deux mains et la souris sous la paume droite.
+// L'animation garde la main droite plus haute que la gauche : une petite rotation constante
+// de l'avant-bras droit autour du coude (armFix, appliquée après chaque mise à jour du mixer)
+// la rabaisse sans changer sa portée.
+function applyArmFix() {
+  if (!armFix) return;
+  const b = armFix.bone;
+  // le mixer ne réécrit l'os que si la valeur animée change : sinon on repart de la pose
+  // animée mémorisée, pour ne pas cumuler la correction image après image
+  if (armFix.applied && b.quaternion.equals(armFix.applied)) b.quaternion.copy(armFix.base);
+  armFix.base.copy(b.quaternion);
+  // pendant les phases souris, la main descend un peu plus (poids lissé selon le temps du clip)
+  let q = armFix.q;
+  if (armFix.wts) {
+    const n = armFix.wts.length;
+    const f = ((mixer._actions[0].time % armFix.dur) / armFix.dur) * n;
+    const i0 = Math.floor(f) % n;
+    const w = armFix.wts[i0] + (armFix.wts[(i0 + 1) % n] - armFix.wts[i0]) * (f - Math.floor(f));
+    if (w > 0) q = _wq.copy(_mq.identity().slerp(armFix.qMouse, w)).multiply(armFix.q);
   }
-  hands.divideScalar(2 * N);
+  // rotation monde autour de l'articulation : local' = P⁻¹ · Q · P · local
+  b.parent.getWorldQuaternion(_pq);
+  _lq.copy(_pq).invert().multiply(q).multiply(_pq);
+  b.quaternion.premultiply(_lq);
+  (armFix.applied ||= new THREE.Quaternion()).copy(b.quaternion);
+}
+
+function fitCharacter(model) {
+  const bones = {};
+  model.traverse((o) => {
+    if (!o.isBone) return;
+    const k = o.name.toLowerCase().replace(/^mixamorig\d*:?/, '');
+    if (!bones[k]) bones[k] = o;
+  });
+  const fingers = ['index', 'middle', 'ring', 'pinky'];
+  const need = ['hips', 'rightforearm', 'lefthand', 'righthand'];
+  ['left', 'right'].forEach((s) => fingers.forEach((f) => need.push(s + 'hand' + f + '1', s + 'hand' + f + '4')));
+  if (need.some((k) => !bones[k])) return;
+
+  const V = () => new THREE.Vector3();
+  const tmp = V();
+  const pos = (k, out = V()) => bones[k].getWorldPosition(out);
+  // bout des doigts qui frappent (index + majeur)
+  const tipOf = (side, out) => pos(side + 'handindex4', out).add(pos(side + 'handmiddle4', tmp)).multiplyScalar(0.5);
+  const N = 240;
+  const clip = mixer._actions[0].getClip();
+  const L = V();
+  const R = V();
+  // parcourt l'animation ; typing = la main droite tape (sinon elle est sur la souris)
+  const sample = (fn) => {
+    for (let i = 0; i < N; i++) {
+      mixer.setTime((i / N) * clip.duration);
+      model.updateMatrixWorld(true);
+      applyArmFix();
+      model.updateMatrixWorld(true);
+      tipOf('left', L);
+      tipOf('right', R);
+      fn(R.x - L.x < 0.33);
+    }
+    mixer.setTime(0);
+  };
+  const pct = (arr, p) => arr.slice().sort((a, b) => a - b)[Math.floor(arr.length * p)];
+
+  // 1) hauteur de frappe de chaque main, et direction coude → doigts droits
+  const yL = [];
+  const yR = [];
+  const armVec = V();
+  sample((typing) => {
+    yL.push(L.y);
+    if (typing) {
+      yR.push(R.y);
+      armVec.add(R.clone().sub(pos('rightforearm', tmp)));
+    }
+  });
+  const dropR = pct(yR, 0.15) - pct(yL, 0.15); // de combien la main droite frappe plus haut
+  armFix = { bone: bones.rightforearm, q: new THREE.Quaternion(), base: new THREE.Quaternion(), applied: null, wts: null };
+  if (dropR > 0.005 && yR.length) {
+    const from = armVec.clone().normalize();
+    const to = armVec.clone().divideScalar(yR.length).add(new THREE.Vector3(0, -dropR, 0)).normalize();
+    armFix.q.setFromUnitVectors(from, to);
+  }
+
+  // 2) mesures avec la correction : bassin, frappe, étendue des mains, paume sur la souris
+  const hip = V();
+  const typeZ = [];
+  const yAll = [];
+  let spanL = 0;
+  let spanR = 0;
+  let nL = 0;
+  let nR = 0;
+  const knuckles = (side, out) => {
+    out.set(0, 0, 0);
+    fingers.forEach((f) => out.add(pos(side + 'hand' + f + '1', tmp)));
+    return out.divideScalar(4);
+  };
+  const K = V();
+  const W = V();
+  const track = [];
+  sample((typing) => {
+    hip.add(pos('hips', tmp));
+    yAll.push(L.y);
+    typeZ.push(L.z);
+    spanL += pos('lefthandpinky4', tmp).x; // bord extérieur de la main gauche
+    nL++;
+    if (typing) {
+      yAll.push(R.y);
+      typeZ.push(R.z);
+      spanR += pos('righthandpinky4', tmp).x;
+      nR++;
+    }
+    // centre de la paume droite : entre le poignet et les jointures, côté jointures.
+    // Main sur la souris = paume bien à droite de la main gauche (pas un simple écart).
+    knuckles('right', K);
+    pos('righthand', W);
+    const p = W.clone().lerp(K, 0.75);
+    const on = p.x - L.x > 0.4;
+    track.push({ on, x: p.x, z: p.z, rot: 0, ev: p.clone().sub(pos('rightforearm', tmp)) });
+  });
   hip.divideScalar(N);
-  mixer.setTime(0);
-  // cible : milieu du clavier, juste au-dessus des touches
-  const target = new THREE.Vector3(-0.06, 0.83, -0.43);
-  model.position.add(target.clone().sub(hands));
+  const strikeY = pct(yAll, 0.15);
+  const handsX = (spanL / nL + (nR ? spanR / nR : spanL / nL + 0.3)) / 2;
+  const handsZ = typeZ.reduce((a, b) => a + b, 0) / typeZ.length;
+
+  // décalage : bassin centré et un peu reculé, doigts qui effleurent le dessus des touches (≈ 0.797)
+  const HIP_Z = 0.1;
+  const KEY_TOP = 0.805;
+  const offset = new THREE.Vector3(-hip.x, KEY_TOP - strikeY, HIP_Z - hip.z);
+  model.position.add(offset);
   model.updateMatrixWorld(true);
-  const hipAfter = hip.clone().add(target.clone().sub(hands));
-  if (window.__fitLog !== undefined || new URLSearchParams(location.search).has('debug')) {
-    window.__fit = { hands: hands.toArray(), hip: hip.toArray(), hipAfter: hipAfter.toArray(), pos: model.position.toArray() };
+
+  // doigts entre la rangée QWERTY et la rangée de repos (≈ 1 cm devant le centre des touches)
+  const kbX = handsX + offset.x;
+  const kbZ = THREE.MathUtils.clamp(handsZ + offset.z + 0.008, -0.62, -0.4);
+  world.placeKeyboard(kbX, kbZ);
+  // 3) souris. Instants « main posée dessus » : paume bien à droite et presque immobile
+  // (la main qui arrive ou repart va vite).
+  const dtS = clip.duration / N;
+  track.forEach((t, i) => {
+    const a = track[(i + N - 1) % N];
+    const c = track[(i + 1) % N];
+    t.on = t.on && Math.hypot(c.x - a.x, c.z - a.z) / (2 * dtS) < 0.25;
+  });
+  let shape = null;
+  if (track.some((t) => t.on)) {
+    // a) sur ces instants, la main descend encore un peu (poids lissé sur ±0,3 s)
+    const MOUSE_DROP = 0.016;
+    const wts = new Float32Array(N);
+    const ev = V();
+    track.forEach((t, i) => {
+      let w = 0;
+      for (let k = -4; k <= 4; k++) w += track[(i + k + N) % N].on ? 1 : 0;
+      wts[i] = w / 9;
+      if (t.on) ev.add(t.ev);
+    });
+    armFix.qMouse = new THREE.Quaternion().setFromUnitVectors(
+      ev.clone().normalize(),
+      ev.clone().normalize().multiplyScalar(ev.length() / track.filter((t) => t.on).length).add(new THREE.Vector3(0, -MOUSE_DROP, 0)).normalize()
+    );
+    armFix.wts = wts;
+    armFix.dur = clip.duration;
+
+    // b) nouvelle mesure, main rabaissée : centre et axe de la paume, et dessous de la main
+    // (sommets de la peau liés à la main droite), dans le repère de la paume
+    const skin = [];
+    model.traverse((o) => {
+      if (!o.isSkinnedMesh || skin.length) return;
+      const handBones = new Set();
+      o.skeleton.bones.forEach((bn, i) => /righthand/i.test(bn.name) && handBones.add(i));
+      const si = o.geometry.attributes.skinIndex;
+      const sw = o.geometry.attributes.skinWeight;
+      const idx = [];
+      for (let i = 0; i < si.count; i++) {
+        let w = 0;
+        for (let k = 0; k < 4; k++) if (handBones.has(si.getComponent(i, k))) w += sw.getComponent(i, k);
+        if (w > 0.5) idx.push(i);
+      }
+      if (idx.length > 100) skin.push(o, idx);
+    });
+    const under = {}; // tranche (cm le long de la paume) → hauteurs minimales sous la main
+    const F = V();
+    const S = V();
+    const vtx = V();
+    let i = 0;
+    sample(() => {
+      const t = track[i];
+      knuckles('right', K);
+      pos('righthand', W);
+      const p = W.clone().lerp(K, 0.75);
+      t.x = p.x;
+      t.z = p.z;
+      t.rot = Math.atan2(-(K.x - W.x), -(K.z - W.z));
+      if (t.on && skin.length && i % 3 === 0) {
+        const [mesh, idx] = skin;
+        F.set(K.x - W.x, 0, K.z - W.z).normalize();
+        S.set(-F.z, 0, F.x);
+        const low = {};
+        idx.forEach((j) => {
+          mesh.getVertexPosition(j, vtx).applyMatrix4(mesh.matrixWorld);
+          const dx = vtx.x - p.x;
+          const dz = vtx.z - p.z;
+          if (Math.abs(dx * S.x + dz * S.z) > 0.025) return; // bande centrale de la main
+          const b = Math.round((dx * F.x + dz * F.z) * 100);
+          low[b] = Math.min(low[b] ?? 9, vtx.y - DESK_Y);
+        });
+        Object.entries(low).forEach(([b, y]) => (under[b] ||= []).push(y));
+      }
+      i++;
+    });
+
+    // c) profil de la souris : sous la main, 3 mm de jeu, de l'arrière de la paume jusqu'à
+    // l'endroit où les doigts replient vers le bureau
+    const prof = (b) => (under[b] ? pct(under[b], 0.2) : null);
+    const ref = prof(0) ?? 0.045;
+    let front = 6;
+    for (let b = 2; b <= 7; b++) {
+      const y = prof(b);
+      if (y !== null && y < 0.72 * ref) {
+        front = b - 0.5;
+        break;
+      }
+    }
+    const uF = THREE.MathUtils.clamp(front / 100, 0.035, 0.065);
+    const uR = Math.max(-0.075, uF - 0.13);
+    const length = uF - uR;
+    const heights = [0, 0.25, 0.5, 0.75, 1].map((k) => {
+      const b = Math.round((uR + k * length) * 100);
+      const ys = [b - 1, b, b + 1].map(prof).filter((y) => y !== null);
+      return THREE.MathUtils.clamp((ys.length ? Math.min(...ys) : ref) - 0.003, 0.018, 0.05);
+    });
+    shape = { length, width: 0.066, heights };
+    world.shapeMouse(shape);
+
+    // d) trajectoire : centre de la souris sous la paume quand la main est dessus, sinon la
+    // dernière position lâchée (deux tours pour que le début de boucle reprenne la fin)
+    const uc = (uR + uF) / 2;
+    const path = new Float32Array(N * 3);
+    let last = null;
+    for (let pass = 0; pass < 2; pass++) {
+      track.forEach((t, k) => {
+        if (t.on) last = t;
+        if (pass && last) path.set([last.x - Math.sin(last.rot) * uc, last.z - Math.cos(last.rot) * uc, last.rot], k * 3);
+      });
+    }
+    mouseTrack = { path, n: N, dur: clip.duration, x: path[0], z: path[1], rot: path[2] };
+    world.placeMouse(path[0], path[1], path[2]);
+  }
+
+  const hipAfter = hip.clone().add(offset);
+  if (new URLSearchParams(location.search).has('debug')) {
+    window.__fit = { dropR, strikeY, hipAfter: hipAfter.toArray(), kb: [kbX, kbZ], shape, track: mouseTrack, model, mixer };
   }
   // l'assise de la chaise suit la hauteur du bassin (dessus de l'assise ≈ 0.52 m par défaut)
   const seatTop = 0.52;
@@ -547,7 +791,11 @@ function frame() {
   const deltaT = Math.min(0.1, t - lastT);
   lastT = t;
   world.update(t);
-  if (mixer) mixer.update(deltaT);
+  if (mixer) {
+    mixer.update(deltaT);
+    applyArmFix();
+    updateMouse(deltaT);
+  }
   Object.values(screens).forEach((s) => s.update(t));
 
   if (state.tween) {
