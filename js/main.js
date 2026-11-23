@@ -5,8 +5,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createScreens, SCREEN_PX } from './screens.js?v=33';
-import { buildScene } from './scene.js?v=33';
+import { createScreens, SCREEN_PX } from './screens.js?v=34';
+import { buildScene } from './scene.js?v=34';
 
 const $ = (s) => document.querySelector(s);
 const loaderText = $('#loader-text');
@@ -913,7 +913,7 @@ function loop(now) {
 }
 
 // Outil de mise au point : ?debug expose la caméra dans la console
-if (new URLSearchParams(location.search).has('debug')) window.__dbg = { camera, camPos, camTarget, state, renderer, get pixelRatio() { return pixelRatio; }, get frames() { return frameNo; } };
+if (new URLSearchParams(location.search).has('debug')) window.__dbg = { camera, camPos, camTarget, state, renderer, get pixelRatio() { return pixelRatio; }, get frames() { return frameNo; }, composer, frame };
 
 selectPhone('profil', false);
 // place la carte « Profil » au centre dès le départ, sans animation
