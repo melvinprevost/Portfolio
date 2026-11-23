@@ -2,9 +2,9 @@
 
 Mon portfolio, sous forme de bureau de nuit en 3D. On me voit de dos, devant trois écrans qu'on peut ouvrir.
 
-[Voir le portfolio en ligne](https://nxritsu.github.io/Portfolio/)
+[Voir le portfolio en ligne](https://melvinprevost.github.io/Portfolio/)
 
-[![Aperçu du portfolio](assets/og-image.jpg)](https://nxritsu.github.io/Portfolio/)
+[![Aperçu du portfolio](assets/og-image.jpg)](https://melvinprevost.github.io/Portfolio/)
 
 ## Comment ça marche
 
