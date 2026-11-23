@@ -255,7 +255,7 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
   // Touches : disposition type clavier (rangée de fonctions + 5 rangées, barre d'espace).
   // Une seule géométrie instanciée ; le rétroéclairage passe entre les touches.
   const layout = [
-    { units: [1.4, ...Array(15).fill(1)], depth: 0.6 }, // Échap + F1–F12…
+    { units: [1.4, ...Array(15).fill(1)], depth: 0.6 }, // Échap + F1 à F12 + 3 touches
     { units: [...Array(14).fill(1), 2] },
     { units: [1.5, ...Array(13).fill(1), 1.5] },
     { units: [1.75, ...Array(12).fill(1), 2.25] },
@@ -354,7 +354,7 @@ export function buildScene(scene, screens, { lowPower = false } = {}) {
     ledLight.color.copy(c);
   });
 
-  // Néon CreaVizione au mur
+  // Néon « Portfolio » au mur
   const neon = new THREE.Mesh(
     new THREE.PlaneGeometry(1.1, 0.275),
     new THREE.MeshBasicMaterial({ map: neonTexture(), transparent: true, toneMapped: false })

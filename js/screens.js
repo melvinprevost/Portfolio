@@ -301,7 +301,7 @@ function creavizioneScreen() {
   return api;
 }
 
-/* ---------------- Néon mural « CreaVizione » ---------------- */
+/* ---------------- Néon mural « Portfolio » ---------------- */
 export function neonTexture() {
   // « Portfolio » en néon violet : s'accorde avec le bandeau LED et la lumière bleutée de la pièce,
   // sans reprendre les couleurs des trois écrans (cyan, vert, bordeaux).

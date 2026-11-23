@@ -444,7 +444,7 @@ camera.lookAt(camTarget);
 
 /* ---------- État ---------- */
 const state = {
-  mode: 'intro', // intro | home | zooming | inside | leaving
+  mode: 'intro', // intro | home | zooming | focus | inside | leaving
   active: null,
   hovered: null,
   pointer: new THREE.Vector2(),
@@ -912,7 +912,7 @@ function loop(now) {
   frame();
 }
 
-// Outil de mise au point : ?debug expose la caméra dans la console
+// Mise au point : ?debug expose la caméra, le rendu et l'état dans la console (window.__dbg)
 if (new URLSearchParams(location.search).has('debug')) window.__dbg = { camera, camPos, camTarget, state, renderer, get pixelRatio() { return pixelRatio; }, get frames() { return frameNo; }, composer, frame };
 
 selectPhone('profil', false);
